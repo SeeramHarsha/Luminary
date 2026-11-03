@@ -31,12 +31,16 @@ if (GCS) {
 const quiet = (label) => (e) => console.error(`[storage] ${label}: ${e.message}`);
 
 // ---- start-up: pull db.json / secret.txt from the bucket so a fresh container sees the same data ----
+// fails loudly instead of hanging silently if a bucket call never answers
+const within = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`timed out after ${ms / 1000}s: ${what}`)), ms))]);
 async function init() {
   if (!GCS) return;
+  console.log(`[storage] connecting to gs://${BUCKET}`);
   for (const f of ['db.json', 'secret.txt']) {
     const obj = bucket.file(metaKey(f));
-    const [exists] = await obj.exists();
-    if (exists) await obj.download({ destination: path.join(DATA_DIR, f) });
+    const [exists] = await within(obj.exists(), 45000, `checking ${f} in bucket ${BUCKET} (permissions or bucket name?)`);
+    console.log(`[storage] ${f}: ${exists ? 'found' : 'not found (will be created)'}`);
+    if (exists) await within(obj.download({ destination: path.join(DATA_DIR, f) }), 60000, `downloading ${f}`);
   }
   console.log(`[storage] using gs://${BUCKET}/${PREFIX ? PREFIX + '/' : ''}`);
 }
