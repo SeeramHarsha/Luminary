@@ -12,13 +12,13 @@ First start seeds the 32 models (names, descriptions, photos from the supplier l
 Compression uses the bundled `ffmpeg-static` binary (or set `FFMPEG_PATH` to your own ffmpeg).
 
 ## Layout
-- `backend/`  Express API and QR rules (deploys to Cloud Run; photos/videos stored and compressed in Cloudinary)
+- `backend/`  Express API and QR rules (deploys to Cloud Run; photos/videos in a bucket or Cloudinary)
 - `frontend/` static app (deploys to Cloud Run behind nginx, forwards /api, /media, /brand to the backend)
 
 ## Google Cloud
-Two Cloud Run services (`backend/`, `frontend/`). Photos and videos are stored and compressed in Cloudinary:
-set the backend secret `CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME`.
-See LUMINARY_DOCUMENTATION.md, section 8.
+Two Cloud Run services (`backend/`, `frontend/`). Photos and videos go either in a Google Cloud Storage bucket
+(no size limit, compressed on Cloud Run) or in Cloudinary (compressed there; free plan: videos up to 100 MB).
+See backend/README.md and LUMINARY_DOCUMENTATION.md, section 8.
 
 ## Host it (HTTPS is required for offline caching / install)
 Any host that runs Node or Docker with a persistent disk: Render, Railway, Fly.io, a VPS.

@@ -1,15 +1,22 @@
 # Luminary backend
 
 Express API and QR access rules. Deployed to Cloud Run (build from `backend/Dockerfile`).
-Photos and videos live in Cloudinary, which also compresses the videos (360p / 540p / 720p + thumbnails).
+Pick ONE place for photos, videos and the database with environment variables:
 
-Secret (Secret Manager, exposed as an environment variable)
-- `CLOUDINARY_URL` = `cloudinary://API_KEY:API_SECRET@CLOUD_NAME`
-- `ADMIN_PASSWORD` (first start only), optionally `SESSION_SECRET`
+## Option A: Google Cloud Storage bucket (no video size limit, videos compressed on Cloud Run with ffmpeg)
+- `STORAGE=gcs`, `GCS_BUCKET=<bucket name>` (only the name, no `gs://`)
+- Run the service as a service account with **Storage Object Admin** on the bucket
+- Allow browser uploads: edit `cors.json` (put your frontend address in `origin`) and run
+  `gcloud storage buckets update gs://BUCKET --cors-file=backend/cors.json`
+- Needs CPU for compression: 4 CPU, 8 GiB memory, CPU always allocated, request timeout 3600 s
 
-Variables
-- `MAX_UPLOAD_MB=2048`, `TRUST_PROXY=3`
-- `PUBLIC_URL=<frontend address>` (used in QR links)
+## Option B: Cloudinary (compression done by Cloudinary; free plan limits videos to 100 MB)
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (or one `CLOUDINARY_URL=cloudinary://KEY:SECRET@NAME`)
+- 1 CPU / 1 GiB is enough
 
-Keep max instances at 1 (the database is a single file, saved in Cloudinary as a private file).
-Without `CLOUDINARY_URL` the backend stores everything on local disk and compresses with ffmpeg (development).
+## Both
+- `ADMIN_PASSWORD` (first start only), `MAX_UPLOAD_MB` (e.g. 2048 for the bucket, 100 on Cloudinary free), `TRUST_PROXY=3`, `PUBLIC_URL=<frontend address>`
+- Keep max instances at 1 (the database is a single file, saved in the bucket / Cloudinary)
+- If you use the bucket, remove the Cloudinary variables (and the other way round). `STORAGE` can force the choice.
+
+Without any of these the backend stores everything on local disk and compresses with ffmpeg (development).

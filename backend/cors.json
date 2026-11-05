@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://YOUR-FRONTEND-URL"],
+    "method": ["PUT", "POST", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Content-Range", "X-Goog-Resumable", "X-Goog-Upload-Status"],
+    "maxAgeSeconds": 3600
+  }
+]

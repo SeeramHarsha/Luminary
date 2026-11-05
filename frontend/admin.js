@@ -45,16 +45,17 @@
   }
 
   // XHR upload with progress, speed and cancel
-  function upload(url, file, onProgress, ctl) {
+  function upload(url, file, onProgress, ctl, raw = false) {
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
       ctl.abort = () => x.abort();
-      x.open('POST', url);
+      x.open(raw ? 'PUT' : 'POST', url);
       const t0 = Date.now();
       x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total, e.loaded / Math.max(0.5, (Date.now() - t0) / 1000), e.loaded, e.total);
       x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch {} x.status < 300 ? resolve(d) : reject(new Error(d.error || 'Upload failed')); };
       x.onerror = () => reject(new Error('Upload failed - check your connection.'));
       x.onabort = () => reject(new Error('cancelled'));
+      if (raw) { x.send(file); return; } // straight to the bucket: the raw file is the body
       const fd = new FormData();
       fd.append('file', file);
       x.send(fd);
@@ -229,7 +230,8 @@
             const d = await api(`/api/admin/models/${m.id}/upload-url/${slot}`, { method: 'POST', body: { filename: file.name, type: file.type, size: file.size } });
             let nm;
             if (d.direct) {
-              await uploadCloud(d.cloud, file, onProg, ctl);
+              if (d.cloud) await uploadCloud(d.cloud, file, onProg, ctl);
+              else await upload(d.url, file, onProg, ctl, true);
               nm = await api(`/api/admin/models/${m.id}/file/${slot}/complete`, { method: 'POST', body: { key: d.key } });
             } else nm = await upload(`/api/admin/models/${m.id}/file/${slot}`, file, onProg, ctl);
             up = null;
@@ -353,7 +355,8 @@
       h('div', { class: 'card' }, h('h2', {}, 'Storage'),
         h('p', { class: 'muted small' }, A.storage && A.storage.kind === 'cloudinary'
           ? `Photos, videos and the database are stored in Cloudinary (${A.storage.cloudName}). Videos upload straight to Cloudinary, which compresses them.`
-          : 'Photos, videos and the database are stored on this server’s disk. Set CLOUDINARY_URL to store everything in Cloudinary instead.')),
+          : A.storage && A.storage.kind === 'gcs' ? `Photos, videos and the database are stored in the Google Cloud Storage bucket gs://${A.storage.bucket}. Videos upload straight to the bucket and are compressed on the server; there is no size limit.`
+          : 'Photos, videos and the database are stored on this server’s disk. Set GCS_BUCKET (Google Cloud Storage) or the Cloudinary variables to store everything in the cloud instead.')),
       h('div', { class: 'card' }, h('h2', {}, 'Brand logo'), h('p', { class: 'muted small' }, 'Upload your Luminary logo image (PNG/WebP with a transparent or black background) to replace the built-in wordmark.'),
         h('div', { class: 'row wrap' }, h('button', { class: 'btn sm', onclick: () => pickFile('image/*', async (f) => { try { await upload('/api/admin/logo', f, () => {}, {}); toast('Logo updated'); await loadCatalog(); refresh(); } catch (e) { toast(e.message, true); } }) }, 'Upload logo'),
           A.logo ? h('button', { class: 'btn sm danger', onclick: async () => { await api('/api/admin/logo', { method: 'DELETE' }); await loadCatalog(); refresh(); } }, 'Use built-in wordmark') : null)));

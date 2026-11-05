@@ -55,7 +55,7 @@ function seedDb() {
   });
   db.profiles.push({ id: rid(4), code: rid(5), label: 'All models', mode: 'all', allowed: [] });
   const adminUser = process.env.ADMIN_USER || 'admin';
-  if (store.cloud && !process.env.ADMIN_PASSWORD) throw new Error('Set ADMIN_PASSWORD before the first start with STORAGE=cloudinary (refusing to create admin/admin123 on a public server).');
+  if (store.remote && !process.env.ADMIN_PASSWORD) throw new Error('Set ADMIN_PASSWORD before the first start with STORAGE=' + store.kind + ' (refusing to create admin/admin123 on a public server).');
   const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
   db.users.push({ id: rid(4), username: adminUser, role: 'admin', profileId: null, ...hashPw(adminPass) });
   save();
@@ -304,7 +304,7 @@ A.get('/state', (req, res) => {
     users: req.sess.role === 'admin' ? db.users.map(adminUserOut) : [],
     logo: !!db.settings.logo,
     me: req.sess.user ? req.sess.user.username : 'Editor link',
-    storage: { kind: store.kind, cloudName: store.cloudName },
+    storage: { kind: store.kind, cloudName: store.cloudName, bucket: store.bucketName },
     defaultPassword: !!req.sess.user && checkPw(req.sess.user, 'admin123'),
   });
 });
@@ -379,10 +379,20 @@ async function runJob(job) {
   const cloud = store.cloud && pend.remote;
   let ok = false;
   try {
-    const made = cloud
-      ? await runCloudJob(job, pend)
-      : await video.processVideo({ src, outDir: UPLOADS, job, onProgress: (p) => { pend.progress = p; } });
+    let made;
+    if (cloud) made = await runCloudJob(job, pend);
+    else {
+      if (pend.remote) await store.fetchLocal(pend.src); // direct-to-bucket upload: pull it down for ffmpeg
+      made = await video.processVideo({ src, outDir: UPLOADS, job, onProgress: (p) => { pend.progress = p; } });
+    }
     if (job.cancelled || !m.pending || m.pending[job.slot] !== pend) { rmVideo(made); return; }
+    if (!cloud) {
+      // local: no-op. bucket: move the finished files into it
+      try {
+        await Promise.all([...made.renditions.map((r) => store.put(r.file, 'video/mp4')), ...made.posters.map((f) => store.put(f, 'image/jpeg'))]);
+      } catch (e) { rmVideo(made); throw new Error('Could not save to storage: ' + e.message); }
+      if (job.cancelled || !m.pending || m.pending[job.slot] !== pend) { rmVideo(made); return; }
+    }
     rmVideo(m.files[job.slot]);
     m.files[job.slot] = { ...made, poster: made.posters.length - 1 };
     delete m.pending[job.slot];
@@ -482,6 +492,7 @@ A.post('/models/:id/file/:slot', upload.single('file'), async (req, res, next) =
         const ok = await video.optimizeImage(f.path, path.join(UPLOADS, out));
         if (ok) { bin(); rec = { file: out, size: fs.statSync(path.join(UPLOADS, out)).size, type: 'image/jpeg' }; }
         else rec = { file: path.basename(f.path), size: f.size, type: f.mimetype };
+        await store.put(rec.file, rec.type); // no-op for local disk, uploads to the bucket otherwise
       }
       rmFile(m.files.image);
       m.files.image = rec;
@@ -492,22 +503,28 @@ A.post('/models/:id/file/:slot', upload.single('file'), async (req, res, next) =
     res.json(adminModel(m));
   } catch (e) { next(e); }
 });
-// Direct-to-Cloudinary video upload (STORAGE=cloudinary): the browser sends the file straight to Cloudinary,
-// so it never passes through Cloud Run (which caps request bodies at 32 MB). Cloudinary then compresses it.
+// Direct video upload (STORAGE=cloudinary or gcs): the browser sends the file straight to Cloudinary / the bucket,
+// so it never passes through Cloud Run (which caps request bodies at 32 MB). Then it is compressed (by Cloudinary, or by ffmpeg here).
 const issued = new Map(); // video id -> { modelId, slot, filename, exp }
-A.post('/models/:id/upload-url/:slot', (req, res, next) => {
+A.post('/models/:id/upload-url/:slot', async (req, res, next) => {
   try {
     const m = findModel(req.params.id);
     const slot = req.params.slot;
     if (!m || !SLOT_TYPE[slot] || slot === 'image') return res.status(404).json({ error: 'Not found' });
-    if (!store.cloud) return res.json({ direct: false });
+    if (!store.remote) return res.json({ direct: false });
     const filename = clean(req.body.filename, 200);
     if (!VIDEO_EXT.test(filename) && !String(req.body.type || '').startsWith('video/')) return res.status(400).json({ error: 'Please choose a video file.' });
     if (Number(req.body.size) > MAX_UPLOAD_MB * 1024 * 1024) return res.status(400).json({ error: `File is larger than ${MAX_UPLOAD_MB} MB.` });
     for (const [k, v] of issued) if (v.exp < Date.now()) issued.delete(k);
     const pid = 'lm_' + rid(8);
     issued.set(pid, { modelId: m.id, slot, filename, exp: Date.now() + 6 * 3600e3 });
-    res.json({ direct: true, cloud: store.uploadParams(pid), key: pid });
+    if (store.cloud) return res.json({ direct: true, cloud: store.uploadParams(pid), key: pid });
+    // bucket: a resumable-upload session; the browser PUTs the raw file to it
+    const name = pid + (path.extname(filename).toLowerCase().replace(/[^.a-z0-9]/g, '') || '.mp4');
+    issued.delete(pid);
+    issued.set(name, { modelId: m.id, slot, filename, exp: Date.now() + 6 * 3600e3 });
+    const url = await store.directUploadUrl(name, String(req.body.type || 'video/mp4'), req.get('origin') || origin(req));
+    res.json({ direct: true, url, key: name });
   } catch (e) { next(e); }
 });
 A.post('/models/:id/file/:slot/complete', async (req, res, next) => {
@@ -656,7 +673,7 @@ app.use((err, req, res, next) => {
 });
 
 Promise.all(seedUploads).then(() => {
-  const server = app.listen(PORT, () => console.log(`Luminary running on port ${PORT}  (storage: ${store.cloud ? 'Cloudinary ' + store.cloudName : DATA_DIR})`));
-  // Cloud Run sends SIGTERM before stopping the container: make sure db.json reached Cloudinary
+  const server = app.listen(PORT, () => console.log(`Luminary running on port ${PORT}  (storage: ${store.cloud ? 'Cloudinary ' + store.cloudName : store.gcs ? 'gs://' + store.bucketName : DATA_DIR})`));
+  // Cloud Run sends SIGTERM before stopping the container: make sure db.json reached remote storage
   process.on('SIGTERM', () => { server.close(); store.flush().finally(() => process.exit(0)); });
 }).catch((e) => { console.error('Could not upload seed images:', e); process.exit(1); });

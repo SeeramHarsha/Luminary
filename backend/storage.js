@@ -1,6 +1,8 @@
 'use strict';
 // Storage backends for uploaded media and the database file.
 //   STORAGE=local (default): everything lives in DATA_DIR/uploads on disk; ffmpeg compresses videos here.
+//   STORAGE=gcs            : photos, videos, db.json and the session secret live in a Google Cloud Storage bucket (GCS_BUCKET).
+//                            Videos are compressed with ffmpeg on the server; there is no size limit (good for 500 MB+ videos).
 //   STORAGE=cloudinary     : photos and videos live in Cloudinary (private "authenticated" assets, compressed there),
 //                            db.json is kept in Cloudinary too. The server only hands files to visitors who are allowed to see them.
 //                            Set CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
@@ -16,15 +18,28 @@ const { Readable } = require('stream');
 const video = require('./video');
 
 const HAS_CLD = !!(process.env.CLOUDINARY_URL || process.env.CLOUDINARY_CLOUD_NAME);
-const KIND = (process.env.STORAGE || (HAS_CLD ? 'cloudinary' : 'local')).toLowerCase();
+const KIND = (process.env.STORAGE || (HAS_CLD ? 'cloudinary' : process.env.GCS_BUCKET ? 'gcs' : 'local')).toLowerCase();
 const CLOUD = KIND === 'cloudinary';
-if (!CLOUD && KIND !== 'local') throw new Error(`STORAGE=${KIND} is not supported any more: set CLOUDINARY_URL (and remove STORAGE / GCS_BUCKET), or STORAGE=local.`);
+const GCS = KIND === 'gcs';
+const REMOTE = CLOUD || GCS;
+if (!REMOTE && KIND !== 'local') throw new Error(`STORAGE=${KIND} is not supported: use cloudinary, gcs or local.`);
+const BUCKET = process.env.GCS_BUCKET || '';
+const PREFIX = (process.env.GCS_PREFIX || '').replace(/^\/+|\/+$/g, '');
+if (GCS && !BUCKET) throw new Error('STORAGE=gcs needs GCS_BUCKET to be set.');
 
-const DATA_DIR = path.resolve(process.env.DATA_DIR || (CLOUD ? path.join(os.tmpdir(), 'luminary') : path.join(__dirname, 'data')));
+const DATA_DIR = path.resolve(process.env.DATA_DIR || (REMOTE ? path.join(os.tmpdir(), 'luminary') : path.join(__dirname, 'data')));
 const UPLOADS = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
 const local = (name) => path.join(UPLOADS, name);
 const quiet = (label) => (e) => console.error(`[storage] ${label}: ${(e && (e.message || (e.error && e.error.message))) || e}`);
+
+// ---- Google Cloud Storage helpers (STORAGE=gcs) ----
+const gkey = (name) => (PREFIX ? PREFIX + '/' : '') + 'media/' + name;
+const gmeta = (name) => (PREFIX ? PREFIX + '/' : '') + name; // db.json, secret.txt
+let bucket = null;
+if (GCS) bucket = new (require('@google-cloud/storage').Storage)().bucket(BUCKET);
+// fails loudly instead of hanging silently if a bucket call never answers
+const within = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`timed out after ${ms / 1000}s: ${what}`)), ms))]);
 
 let cloudinary = null;
 let cfg = {};
@@ -68,6 +83,17 @@ function urlFor(name) {
 
 // ---- start-up: restore db.json from Cloudinary so a fresh container sees the same data ----
 async function init() {
+  if (GCS) {
+    console.log(`[storage] connecting to gs://${BUCKET}`);
+    for (const f of ['db.json', 'secret.txt']) {
+      const obj = bucket.file(gmeta(f));
+      const [exists] = await within(obj.exists(), 45000, `checking ${f} in bucket ${BUCKET} (permissions or bucket name?)`);
+      console.log(`[storage] ${f}: ${exists ? 'found' : 'not found (will be created)'}`);
+      if (exists) await within(obj.download({ destination: path.join(DATA_DIR, f) }), 60000, `downloading ${f}`);
+    }
+    console.log(`[storage] using gs://${BUCKET}/${PREFIX ? PREFIX + '/' : ''}`);
+    return;
+  }
   if (!CLOUD) return;
   console.log(`[storage] connecting to Cloudinary (${cfg.cloud_name})`);
   const u = cloudinary.url(META_PID + 'db.json', { secure: true, sign_url: true, type: 'authenticated', resource_type: 'raw', version: Math.floor(Date.now() / 1000) });
@@ -85,9 +111,11 @@ async function init() {
 const pending = new Map();
 const inflight = new Map();
 function pushMeta(file) {
-  if (!CLOUD || file !== 'db.json') return;
+  if (!REMOTE || (CLOUD && file !== 'db.json')) return;
   if (inflight.has(file)) { pending.set(file, true); return; }
-  const p = cloudinary.uploader.upload(path.join(DATA_DIR, file), { resource_type: 'raw', type: 'authenticated', public_id: META_PID + file, overwrite: true, invalidate: true })
+  const p = (GCS
+    ? bucket.file(gmeta(file)).save(fs.readFileSync(path.join(DATA_DIR, file)), { resumable: false, contentType: file.endsWith('.json') ? 'application/json' : 'text/plain' })
+    : cloudinary.uploader.upload(path.join(DATA_DIR, file), { resource_type: 'raw', type: 'authenticated', public_id: META_PID + file, overwrite: true, invalidate: true }))
     .catch(quiet('could not save ' + file))
     .finally(() => { inflight.delete(file); if (pending.delete(file)) pushMeta(file); });
   inflight.set(file, p);
@@ -97,6 +125,12 @@ const flush = () => Promise.all([...inflight.values()]);
 // ---- media ----
 // Moves a finished local image into the backend. Resolves to { name, size } (the name can change: photos become .jpg).
 async function put(name, type, opts = {}) {
+  if (GCS) {
+    await bucket.upload(local(name), { destination: gkey(name), resumable: false, metadata: { contentType: type || 'application/octet-stream', cacheControl: 'private, max-age=31536000, immutable' } });
+    const size = fs.statSync(local(name)).size;
+    fs.rmSync(local(name), { force: true });
+    return { name, size };
+  }
   if (!CLOUD) { let size = 0; try { size = fs.statSync(local(name)).size; } catch {} return { name, size }; }
   const p = parse(name);
   if (!p || p.kind === 'rend' || p.kind === 'poster') throw new Error('cannot upload ' + name);
@@ -109,7 +143,17 @@ async function put(name, type, opts = {}) {
   return { name: `${p.pid}.${photo ? 'jpg' : r.format}`, size: r.bytes };
 }
 // Server-side copy of an image/thumbnail under a new name; resolves to the size.
+// Makes sure a copy of the file is in the local scratch folder (used before ffmpeg runs on a direct-to-bucket upload).
+async function fetchLocal(name) {
+  if (GCS && !fs.existsSync(local(name))) await bucket.file(gkey(name)).download({ destination: local(name) });
+  return local(name);
+}
 async function copy(from, to) {
+  if (GCS) {
+    const dst = bucket.file(gkey(to));
+    await bucket.file(gkey(from)).copy(dst);
+    return Number((await dst.getMetadata())[0].size);
+  }
   if (!CLOUD) { fs.copyFileSync(local(from), local(to)); return fs.statSync(local(to)).size; }
   const p = parse(to);
   const r = await cloudinary.uploader.upload(urlFor(from), { public_id: p.pid, type: 'authenticated', resource_type: 'image', overwrite: true, format: p.ext });
@@ -120,6 +164,7 @@ const recentlyRemoved = new Map();
 function remove(name) {
   if (!name) return;
   fs.rm(local(name), { force: true }, () => {});
+  if (GCS) { bucket.file(gkey(name)).delete({ ignoreNotFound: true }).catch(quiet('delete ' + name)); return; }
   if (!CLOUD) return;
   const p = parse(name);
   if (!p) return;
@@ -132,6 +177,11 @@ function remove(name) {
 }
 // size of an uploaded video (by id) or a stored local file, or null if it is not there
 async function stat(name) {
+  if (GCS) {
+    const f = bucket.file(gkey(name));
+    if (!(await f.exists())[0]) return null;
+    return { size: Number((await f.getMetadata())[0].size) };
+  }
   if (!CLOUD) { try { return { size: fs.statSync(local(name)).size }; } catch { return null; } }
   const info = await videoInfo(name).catch(() => null);
   return info ? { size: info.bytes } : null;
@@ -139,6 +189,35 @@ async function stat(name) {
 
 // Sends a stored file with HTTP Range support (needed for video seeking). Cloudinary serves it to us, we serve it to the visitor.
 async function send(req, res, name, type) {
+  if (GCS) {
+    const f = bucket.file(gkey(name));
+    try {
+      const [md] = await f.getMetadata();
+      const size = Number(md.size);
+      res.set({ 'Content-Type': type, 'Accept-Ranges': 'bytes' });
+      if (md.etag) res.set('ETag', `"${md.etag}"`);
+      if (md.updated) res.set('Last-Modified', new Date(md.updated).toUTCString());
+      if (md.etag && req.get('if-none-match') === `"${md.etag}"`) return res.status(304).end();
+      let start = 0;
+      let end = size - 1;
+      const m = /^bytes=(\d*)-(\d*)$/.exec(req.get('range') || '');
+      if (m && (m[1] || m[2])) {
+        if (m[1] === '') start = Math.max(0, size - Number(m[2]));
+        else { start = Number(m[1]); if (m[2] !== '') end = Math.min(Number(m[2]), size - 1); }
+        if (start > end || start >= size) return res.status(416).set('Content-Range', `bytes */${size}`).end();
+        res.status(206).set('Content-Range', `bytes ${start}-${end}/${size}`);
+      }
+      res.set('Content-Length', String(size ? end - start + 1 : 0));
+      if (req.method === 'HEAD' || !size) return res.end();
+      const rs = f.createReadStream({ start, end });
+      rs.on('error', () => res.destroy());
+      res.on('close', () => rs.destroy());
+      return rs.pipe(res);
+    } catch (e) {
+      if (res.headersSent) return res.destroy();
+      return res.status(e.code === 404 ? 404 : 502).end();
+    }
+  }
   if (!CLOUD) return res.type(type).sendFile(local(name), (e) => { if (e && !res.headersSent) res.status(e.status || 404).end(); });
   const u = urlFor(name);
   if (!u) return res.status(404).end();
@@ -160,6 +239,12 @@ async function send(req, res, name, type) {
   } catch (e) {
     if (res.headersSent) res.destroy(); else res.status(502).end();
   }
+}
+
+// ---- direct browser -> bucket upload (STORAGE=gcs): a resumable-upload session the browser can PUT the file to ----
+async function directUploadUrl(name, type, origin) {
+  const [uri] = await bucket.file(gkey(name)).createResumableUpload({ origin, metadata: { contentType: type || 'application/octet-stream' } });
+  return uri;
 }
 
 // ---- direct browser -> Cloudinary video uploads (never touches Cloud Run's 32 MB request limit) ----
@@ -219,6 +304,6 @@ async function ready(name) {
 }
 
 module.exports = {
-  kind: KIND, cloud: CLOUD, cloudName: cfg.cloud_name || null, DATA_DIR, UPLOADS,
-  init, pushMeta, flush, put, copy, remove, stat, send, uploadParams, videoInfo, plan, generate, ready, sizes,
+  kind: KIND, cloud: CLOUD, gcs: GCS, remote: REMOTE, cloudName: cfg.cloud_name || null, bucketName: BUCKET || null, DATA_DIR, UPLOADS,
+  init, pushMeta, flush, put, fetchLocal, copy, remove, stat, send, directUploadUrl, uploadParams, videoInfo, plan, generate, ready, sizes,
 };
