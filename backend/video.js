@@ -6,6 +6,8 @@ const path = require('path');
 const crypto = require('crypto');
 
 const FFMPEG = process.env.FFMPEG_PATH || (() => { try { return require('ffmpeg-static'); } catch { return 'ffmpeg'; } })();
+// x264 speed/size trade-off: veryfast is ~3x quicker than medium for ~10-15% bigger files. Override with FFMPEG_PRESET (e.g. medium, slow).
+const PRESET = process.env.FFMPEG_PRESET || 'veryfast';
 const rid = () => crypto.randomBytes(8).toString('hex');
 
 // Quality ladder, keyed by the SHORT side of the picture so portrait phone clips are handled too.
@@ -79,7 +81,7 @@ async function processVideo({ src, outDir, job, onProgress }) {
       const landscape = info.width >= info.height;
       const vf = landscape ? `scale=-2:${t.short}` : `scale=${t.short}:-2`;
       const args = ['-y', '-hide_banner', '-i', src, '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn', '-vf', vf,
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', String(t.crf), '-maxrate', t.maxrate, '-bufsize', String(parseInt(t.maxrate, 10) * 2) + 'k',
+        '-c:v', 'libx264', '-preset', PRESET, '-crf', String(t.crf), '-maxrate', t.maxrate, '-bufsize', String(parseInt(t.maxrate, 10) * 2) + 'k',
         '-pix_fmt', 'yuv420p', '-profile:v', 'main', '-g', '48', '-keyint_min', '24', '-movflags', '+faststart']; // short GOP = fast, accurate scrubbing
       if (info.fps > 30.5) args.push('-r', '30');
       if (info.audio) args.push('-c:a', 'aac', '-b:a', '48k', '-ac', '1', '-ar', '44100');
