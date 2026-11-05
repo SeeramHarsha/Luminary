@@ -85,6 +85,9 @@ async function stat(name) {
   return { size: Number(md.size) };
 }
 
+// Cloud Run refuses a single response bigger than 32 MiB unless it is streamed (chunked). So a Range request is answered with
+// at most SLICE bytes (browsers simply ask for the next part), and a full download of a big file is sent without Content-Length.
+const SLICE = 16 * 1024 * 1024;
 // Sends a stored file with HTTP Range support (needed for video seeking).
 function send(req, res, name, type) {
   if (!GCS) return res.type(type).sendFile(local(name), (e) => { if (e && !res.headersSent) res.status(e.status || 404).end(); });
@@ -97,14 +100,17 @@ function send(req, res, name, type) {
     if (md.etag && req.get('if-none-match') === `"${md.etag}"`) return res.status(304).end();
     let start = 0;
     let end = size - 1;
+    let ranged = false;
     const m = /^bytes=(\d*)-(\d*)$/.exec(req.get('range') || '');
     if (m && (m[1] || m[2])) {
       if (m[1] === '') start = Math.max(0, size - Number(m[2]));
       else { start = Number(m[1]); if (m[2] !== '') end = Math.min(Number(m[2]), size - 1); }
       if (start > end || start >= size) return res.status(416).set('Content-Range', `bytes */${size}`).end();
+      end = Math.min(end, start + SLICE - 1);
+      ranged = true;
       res.status(206).set('Content-Range', `bytes ${start}-${end}/${size}`);
     }
-    res.set('Content-Length', String(size ? end - start + 1 : 0));
+    if (ranged || end - start + 1 <= SLICE) res.set('Content-Length', String(size ? end - start + 1 : 0));
     if (req.method === 'HEAD' || !size) return res.end();
     const rs = f.createReadStream({ start, end });
     rs.on('error', () => res.destroy());
