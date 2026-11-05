@@ -14,7 +14,7 @@
 2. **Dual-Video Instruction**: Every kit features two parallel video tracks:
    - **Assembly Video**: Visual step-by-step construction instructions showing how physical pieces fit together.
    - **Working Video**: Demonstration of the completed model in action, explaining the physics/engineering theory behind it.
-3. **100% Offline Resilience**: Single-tap offline downloading stores the entire UI, photos, descriptions, and compressed videos directly in the browser's persistent Cache API on the user's phone or computer.
+3. **100% Offline Resilience**: Single-tap offline downloading stores the entire UI, photos, descriptions, and videos directly in the browser's persistent Cache API on the user's phone or computer.
 
 ---
 
@@ -28,8 +28,6 @@
 
 ### B. Custom Video Player (`frontend/player.js`)
 Luminary features an ultra-lightweight, touch-friendly player built specifically for mobile devices:
-- **Bandwidth Detection**: Uses the `navigator.connection` API to detect network speed (2G, 3G, 4G, Wi-Fi) and select the optimal video resolution automatically.
-- **Auto-Stall Downshifting**: If playback stalls due to network congestion, the player automatically steps down to a lower bitrate to prevent buffering.
 - **Orientation Lock & Cinema Mode**: Tapping play automatically switches mobile devices into fullscreen landscape mode for an unobstructed view of the assembly steps.
 - **Touch Gestures & Scrubbing**: Double-tapping the left or right side of the screen jumps backward or forward by 10 seconds; speed controls range from `0.5x` to `2.0x`.
 
@@ -121,35 +119,26 @@ Instructors access the management panel via **Account Icon > Admin sign in** or 
 
 ## 6. Technical Architecture & Media Pipeline
 
-### A. System Architecture Diagram
+### A. System Architecture
 
 ```
 [ Student / Phone / Browser ]
-         │
-         ├─── Scan Physical QR Code ──────► Express Server (Port 3000)
-         │                                       │
-         ├─── Stream Video (Byte Ranges) ────────┤
-         │                                       ▼
-         └─── Download All for Offline ────► Browser Cache API (lm-media)
-                                                 ▲
-                                                 │
-[ Admin Dashboard ]                              │
-         │                                       │
-         ├─── Uploads Raw Video (MP4/MOV) ───────┤
-         ▼                                       │
-[ FFmpeg Background Transcoding Queue ]          │
-         │                                       │
-         ├── 360p (Data Saver) ──────────────────┤
-         ├── 540p (Standard) ────────────────────┤
-         ├── 720p (HD) ──────────────────────────┤
-         └── 5x Poster Candidates (.jpg) ────────┘
+         |
+         |-- Scan Physical QR Code --------> Frontend (nginx on Cloud Run)
+         |                                        |  forwards /api, /media, /brand
+         |                                        v
+         |                                 Backend (Express on Cloud Run) -- QR rules, logins, db.json
+         |                                        |
+         |-- Download All for Offline <-- streams files (HTTP Range) --  Cloud Storage bucket
+                                                  ^
+[ Admin / Editor ] -- uploads videos straight to the bucket (browser -> bucket)
 ```
 
-### B. Video Transcoding Engine (`backend/video.js`)
-1. **Multi-Bitrate Ladder**: Every uploaded video is transcoded into three H.264/AAC renditions (360p, 540p, 720p).
-2. **Short-Side Scaling**: Transcoding scales by the short side of the frame, natively supporting both vertical smartphone videos and horizontal landscape videos without black bars or distortion.
-3. **Queue Protection**: Video compression processes one file at a time in the background so CPU utilization never spikes or freezes live visitor playback.
-4. **Fast Scrubbing**: Keyframe intervals are capped at 1 second, enabling instant seeking and scrubbing even over slow networks.
+### B. Video storage (no compression)
+1. **Stored as uploaded**: a video is published exactly as the admin uploads it. MP4, MOV (H.264) and WebM are accepted, because browsers play them directly. Other formats are refused with a clear message.
+2. **Instant**: nothing is processed, so a video is watchable the moment the upload finishes. There are no thumbnail candidates; the folder photo is used instead.
+3. **Trade-off**: visitors download the original size, so keep files reasonably small (720p to 1080p) to save their mobile data and offline storage.
+4. **Photos** are still shrunk on upload to a JPEG of at most 900 px.
 
 ### C. Security & Data Integrity
 - **Zero Heavy Dependencies**: Operates on a single atomic JSON database (`data/db.json`), ensuring portability without needing external database engines (PostgreSQL, MongoDB, or MySQL).
@@ -164,9 +153,9 @@ Instructors access the management panel via **Account Icon > Admin sign in** or 
 luminary-model-assembly-app/
 ├── backend/                  # deployed to Cloud Run
 │   ├── server.js             # Express REST API, session auth, video queue
-│   ├── start.js              # Entry point (restores db.json from the bucket / Cloudinary, then starts server.js)
-│   ├── storage.js            # Local-disk, Google bucket or Cloudinary storage backend
-│   ├── video.js              # FFmpeg transcoding ladder & thumbnail extractor (local disk and bucket storage)
+│   ├── start.js              # Entry point (restores db.json from the bucket, then starts server.js)
+│   ├── storage.js            # Local-disk or Google Cloud Storage backend
+│   ├── video.js              # ffmpeg helper that shrinks uploaded photos
 │   ├── seed.js               # Initial dataset containing 32 model kits
 │   ├── seed-images/          # Preloaded stock photos for the 32 models
 │   ├── Dockerfile, cors.json (bucket upload CORS)
@@ -182,7 +171,7 @@ luminary-model-assembly-app/
 ```
 
 ### File Locations:
-- **Server Media Storage**: `data/uploads/` (stores all compressed `.mp4` renditions and `.jpg` posters).
+- **Server Media Storage**: `data/uploads/` (stores uploaded videos and photos when STORAGE is local).
 - **Database File**: `data/db.json` (stores catalog models, descriptions, user logins, and QR profile access rules).
 - **Client Offline Storage**: Stored inside browser cache under cache partition **`lm-media`**.
 
@@ -198,34 +187,30 @@ npm start
 ```
 The backend also serves the sibling `frontend/` folder when it exists, so `http://localhost:3000` works as one app (and on your Wi-Fi at `http://<your-ip>:3000`).
 
-### Deploying to Google Cloud: two Cloud Run services + a storage option
+### Deploying to Google Cloud: two Cloud Run services + a bucket
 
 | Part | Folder | Runs on |
 | :--- | :--- | :--- |
 | Backend (API, QR rules, database) | `backend/` | Cloud Run service (builds from `backend/Dockerfile`) |
 | Frontend (the app screens) | `frontend/` | Cloud Run service (nginx, builds from `frontend/Dockerfile`) |
-| Photos and videos | n/a | Google Cloud Storage bucket **or** Cloudinary (choose one) |
+| Photos, videos, `db.json` | n/a | Google Cloud Storage bucket |
 
 The frontend (nginx) forwards `/api`, `/media` and `/brand` to the backend, so visitors see one address (login cookies, QR links and offline mode work without CORS). Set `BACKEND_URL` and `BACKEND_HOST` on the frontend service.
 
-**Storage option A: Google Cloud Storage bucket** (`STORAGE=gcs`, `GCS_BUCKET=<name>`). No limit on video size, so 500 MB+ videos work. The admin or an editor uploads a video **directly from the browser to the bucket** (avoids Cloud Run's 32 MB request limit). The backend downloads it, compresses it with FFmpeg into 360p/540p/720p plus five thumbnail candidates, and saves the results back. Needs a service account with Storage Object Admin on the bucket, the bucket CORS rule in `backend/cors.json`, and compression power on the backend: 4 CPU, 8 GiB memory, CPU always allocated, request timeout 3600 s.
+**Bucket storage** (`GCS_BUCKET=<name>`). The admin or an editor uploads a video **directly from the browser to the bucket** (avoids Cloud Run's 32 MB request limit), so there is no practical size limit. The files stay private: visitors stream them through the backend, so the QR locks still apply. The database (`db.json`) is saved in the bucket and restored on start, so a restarted or redeployed container keeps its data. Requirements: the service runs as a service account with **Storage Object Admin** on the bucket, and the bucket has the CORS rule in `backend/cors.json` (put your frontend address in `origin`; apply with `gcloud storage buckets update gs://BUCKET --cors-file=backend/cors.json`).
 
-**Storage option B: Cloudinary** (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`). Cloudinary compresses the video, so the backend needs only 1 CPU / 1 GiB. The browser uploads in 20 MB chunks straight to Cloudinary. The free plan limits videos to 100 MB per file; larger files need a paid plan.
-
-Either way the files are private: visitors stream them through the backend, so the QR locks still apply. The database (`db.json`) is saved in the same storage and restored on start, so a restarted or redeployed container keeps its data. Keep **1 instance only** (`db.json` is a single file).
+Backend Cloud Run settings: **1 instance only** (`db.json` is a single file), CPU always allocated (it saves the database in the background), 1 CPU / 1 GiB memory, `TRUST_PROXY=3`.
 
 | Variable | Purpose |
 | :--- | :--- |
-| `GCS_BUCKET` | Bucket name; turns on bucket storage (option A) |
-| `CLOUDINARY_URL` or the three `CLOUDINARY_*` variables | Turns on Cloudinary storage (option B) |
-| `STORAGE` | Optional: `gcs`, `cloudinary` or `local` to force the choice |
+| `GCS_BUCKET` | Bucket name (only the name, no `gs://`); turns on bucket storage |
 | `ADMIN_PASSWORD` | Admin password for the first start |
-| `SESSION_SECRET` | Optional cookie signing key (stored in the storage if unset) |
+| `SESSION_SECRET` | Optional cookie signing key (stored in the bucket if unset) |
 | `PUBLIC_URL` | Frontend address, used in QR links |
-| `MAX_UPLOAD_MB` | Largest video the admin may upload (2048 for the bucket; 100 for Cloudinary free) |
+| `MAX_UPLOAD_MB` | Largest video the admin may upload (e.g. 2048) |
 | `TRUST_PROXY` | Number of proxies in front of the backend (3 behind two Cloud Run services) |
-| `COMPRESS` | `background` (default: play the upload at once, compress later), `off` (never compress) or `on` (wait for compression) |
 | `GCS_PREFIX` | Optional folder inside the bucket |
+| `STORAGE` | Optional: `local` forces disk storage (development) |
 | `FRONTEND_DIR` | Folder the backend also serves (local development; default `../frontend`) |
 
 ### Default Credentials

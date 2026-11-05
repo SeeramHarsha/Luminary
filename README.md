@@ -9,36 +9,30 @@ Light on data, works offline once saved.
 
 First start seeds the 32 models (names, descriptions, photos from the supplier list) and an admin account
 (`admin` / `ADMIN_PASSWORD`; default `admin123` - change it under Admin > Settings).
-Compression uses the bundled `ffmpeg-static` binary (or set `FFMPEG_PATH` to your own ffmpeg).
+Folder photos are shrunk with the bundled `ffmpeg-static` binary (or set `FFMPEG_PATH`). Videos are not processed.
 
 ## Layout
-- `backend/`  Express API and QR rules (deploys to Cloud Run; photos/videos in a bucket or Cloudinary)
+- `backend/`  Express API and QR rules (deploys to Cloud Run; photos/videos in a bucket)
 - `frontend/` static app (deploys to Cloud Run behind nginx, forwards /api, /media, /brand to the backend)
 
 ## Google Cloud
-Two Cloud Run services (`backend/`, `frontend/`). Photos and videos go either in a Google Cloud Storage bucket
-(no size limit, compressed on Cloud Run) or in Cloudinary (compressed there; free plan: videos up to 100 MB).
-See backend/README.md and LUMINARY_DOCUMENTATION.md, section 8.
+Two Cloud Run services (`backend/`, `frontend/`) and a Google Cloud Storage bucket for photos, videos and the database.
+Videos are stored as uploaded (MP4, MOV or WebM), with no compression. See backend/README.md and LUMINARY_DOCUMENTATION.md, section 8.
 
 ## Host it (HTTPS is required for offline caching / install)
 Any host that runs Node or Docker with a persistent disk: Render, Railway, Fly.io, a VPS.
 - Mount a persistent volume and set `DATA_DIR` to it (uploads and db.json live there).
 - Set `PUBLIC_URL=https://your-domain` so QR codes point at the right address.
 - Set `ADMIN_PASSWORD`; optionally `SESSION_SECRET` and `MAX_UPLOAD_MB` (default 1024).
-- Compression needs CPU: a 1-2 vCPU server compresses about as fast as the clip plays. One video is processed at a time; the rest wait in a queue.
 - If you put a proxy (nginx etc.) in front, raise its upload limit (`client_max_body_size`) to match `MAX_UPLOAD_MB`.
 
 ## Videos
-Every uploaded video, any size or format, is compressed on the server to up to three H.264 versions
-(Data saver 360p, Standard 540p, HD 720p, by the short side, so portrait phone clips work too).
-Only versions not bigger than the source are made. The original is deleted after compression.
-Five thumbnail candidates are extracted; the admin picks the one that shows the finished model.
-Viewers get the version that suits their connection (Auto), can pick one by hand, and Auto steps down
-if playback stalls. Videos stream from the first second and seek quickly (short keyframe interval).
+Videos are stored exactly as uploaded (MP4, MOV or WebM) and are watchable straight away. There is no compression,
+so keep files reasonably small (720p to 1080p) to save visitors' mobile data and offline storage.
 
 ## Using it
 - Admin > Models: upload / replace / delete folder image, working video, assembly video; rename or delete folders.
-  A video stays playable with its old version while a replacement is compressing.
+  Videos need no processing: a replacement is live as soon as the upload finishes.
 - Admin > QR access: each QR opens the library with its own unlocked set ("Open all models", or tick models; Open all / Lock all buttons). "Download PNG" saves a printable card (QR + label).
 - Admin > Users: create user logins (optionally tied to a QR access set). QR visitors need no login.
 - Admin > Settings: change password, upload the real Luminary logo image.
