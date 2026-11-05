@@ -20,3 +20,9 @@ Pick ONE place for photos, videos and the database with environment variables:
 - If you use the bucket, remove the Cloudinary variables (and the other way round). `STORAGE` can force the choice.
 
 Without any of these the backend stores everything on local disk and compresses with ffmpeg (development).
+
+## Video compression (`COMPRESS`, bucket / local storage)
+- `background` (default): the uploaded video is playable immediately; 360p/540p/720p versions are made in the background and replace it when ready. Needs the CPU only while compressing.
+- `off`: never compress. Visitors get the uploaded file as it is (mp4, mov or webm). Fastest; 1 CPU / 1 GiB is enough. Big files use more mobile data, and "download for offline" is large.
+- `on`: the video appears only after compression finishes.
+Files that browsers cannot play directly (mkv, avi ...) are always compressed first. Cloudinary does its own compression.

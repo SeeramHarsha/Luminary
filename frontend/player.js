@@ -106,7 +106,7 @@
       }
       return pref === 'auto' ? netIndex(R.length) : indexFor(pref);
     }
-    function label(i) { return R[i] ? `${R[i].h}p` : ''; }
+    function label(i) { return R[i] ? (R[i].h ? `${R[i].h}p` : 'Original') : ''; }
     function refreshQ() {
       qBtn.textContent = pref === 'auto' ? `Auto · ${label(cur)}` : label(cur);
     }
@@ -133,7 +133,7 @@
       const open = force !== undefined ? force : menu.hidden;
       menu.hidden = !open;
       if (!open) return keepUI();
-      const items = [['auto', 'Auto', 'Picks the best for your connection']].concat(R.map((r) => [r.q, `${QNAME[r.q]} · ${r.h}p`, mb(r.size)]));
+      const items = [['auto', 'Auto', 'Picks the best for your connection']].concat(R.map((r) => [r.q, r.h ? `${QNAME[r.q]} · ${r.h}p` : 'Original', mb(r.size)]));
       menu.replaceChildren(...items.map(([q, name, sub]) => h('button', { class: 'pl-opt' + (q === pref ? ' on' : ''), onclick: async () => {
         pref = q;
         try { localStorage.setItem('lm_q', q); } catch {}
@@ -345,7 +345,7 @@
     (async () => {
       const i = await pickIndex().catch(() => R.length - 1);
       const r = R[i];
-      bigLabel.textContent = [fmt(info.duration), r ? `${r.h}p` : '', saved.has(i) ? 'saved offline' : r ? mb(r.size) : ''].filter(Boolean).join(' · ');
+      bigLabel.textContent = [fmt(info.duration), r && r.h ? `${r.h}p` : '', saved.has(i) ? 'saved offline' : r ? mb(r.size) : ''].filter(Boolean).join(' · ');
       cur = i; refreshQ();
     })();
     speedBtn.textContent = '1×';

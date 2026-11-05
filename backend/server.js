@@ -13,6 +13,10 @@ const store = require('./storage');
 const PORT = process.env.PORT || 3000;
 const { DATA_DIR, UPLOADS } = store; // with STORAGE=cloudinary UPLOADS is only a scratch folder
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+// COMPRESS=background (default): a video is playable the moment it is uploaded; compressed versions replace it when ready.
+// COMPRESS=off: never compress, visitors get the uploaded file as is (mp4/mov/webm only). COMPRESS=on: wait for compression.
+const COMPRESS = (process.env.COMPRESS || 'background').toLowerCase();
+const PLAYABLE = /\.(mp4|m4v|mov|webm)$/i; // formats browsers can play without conversion
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 1024);
 const SESSION_DAYS = 90;
 
@@ -245,7 +249,7 @@ function findMedia(name) {
       const v = m.files[s];
       if (!v) continue;
       if ((v.posters || []).includes(name)) return { m, kind: 'poster', type: 'image/jpeg' };
-      if ((v.renditions || []).some((r) => r.file === name)) return { m, kind: 'rendition', type: 'video/mp4' };
+      if ((v.renditions || []).some((r) => r.file === name)) return { m, kind: 'rendition', type: (v.renditions.find((r) => r.file === name) || {}).type || 'video/mp4' };
     }
   }
   return null;
@@ -323,7 +327,21 @@ function cancelJob(m, slot) {
   const j = jobs.get(m.id + ':' + slot);
   if (j) { j.cancelled = true; if (j.child) j.child.kill('SIGKILL'); jobs.delete(m.id + ':' + slot); }
   const p = m.pending && m.pending[slot];
-  if (p) { rmName(p.src); delete m.pending[slot]; }
+  if (p) { if (!inUse(m, slot, p.src)) rmName(p.src); delete m.pending[slot]; }
+}
+// is this stored file the video visitors are watching right now? (an uploaded original that is published uncompressed)
+const inUse = (m, slot, file) => !!file && ((m.files[slot] || {}).renditions || []).some((r) => r.file === file);
+// publishes the uploaded file itself as the (only) version, so it can be watched immediately
+function publishOriginal(m, slot, name, size) {
+  rmVideo(m.files[slot]);
+  m.files[slot] = { renditions: [{ q: 'high', file: name, size, w: 0, h: 0, type: /\.webm$/i.test(name) ? 'video/webm' : 'video/mp4' }], posters: [], duration: 0, width: 0, height: 0, poster: -1, original: true };
+}
+// a video has arrived (in the bucket, or on local disk): publish and/or compress it according to COMPRESS
+function acceptVideo(m, slot, name, size, origName, remote) {
+  if (COMPRESS === 'on' || store.cloud || !PLAYABLE.test(name)) return startJob(m, slot, name, origName, remote);
+  if (COMPRESS === 'background') startJob(m, slot, name, origName, remote); else cancelJob(m, slot);
+  publishOriginal(m, slot, name, size);
+  save();
 }
 function startJob(m, slot, srcName, origName, remote = false) {
   cancelJob(m, slot);
@@ -404,7 +422,8 @@ async function runJob(job) {
   } finally {
     jobs.delete(job.modelId + ':' + job.slot);
     // local: the raw upload is always deleted. Cloudinary: it is the source of the compressed versions, so keep it unless the job failed
-    if (!job.cancelled) { if (!(cloud && ok)) rmName(pend.src); pend.src = null; }
+    // an uploaded original that is still being watched must stay (e.g. compression failed)
+    if (!job.cancelled) { if (!(cloud && ok) && !inUse(m, job.slot, pend.src)) rmName(pend.src); pend.src = null; }
     save();
   }
 }
@@ -498,7 +517,7 @@ A.post('/models/:id/file/:slot', upload.single('file'), async (req, res, next) =
       m.files.image = rec;
       save();
     } else {
-      startJob(m, req.params.slot, path.basename(f.path), f.originalname);
+      acceptVideo(m, req.params.slot, path.basename(f.path), f.size, f.originalname, false);
     }
     res.json(adminModel(m));
   } catch (e) { next(e); }
@@ -538,7 +557,7 @@ A.post('/models/:id/file/:slot/complete', async (req, res, next) => {
     const st = await store.stat(key);
     if (!st || !st.size) return res.status(400).json({ error: 'The upload did not finish - please try again.' });
     if (st.size > MAX_UPLOAD_MB * 1024 * 1024) { store.remove(key); return res.status(400).json({ error: `File is larger than ${MAX_UPLOAD_MB} MB.` }); }
-    startJob(m, slot, key, grant.filename, true);
+    acceptVideo(m, slot, key, st.size, grant.filename, true);
     res.json(adminModel(m));
   } catch (e) { next(e); }
 });

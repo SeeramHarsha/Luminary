@@ -224,6 +224,7 @@ Either way the files are private: visitors stream them through the backend, so t
 | `PUBLIC_URL` | Frontend address, used in QR links |
 | `MAX_UPLOAD_MB` | Largest video the admin may upload (2048 for the bucket; 100 for Cloudinary free) |
 | `TRUST_PROXY` | Number of proxies in front of the backend (3 behind two Cloud Run services) |
+| `COMPRESS` | `background` (default: play the upload at once, compress later), `off` (never compress) or `on` (wait for compression) |
 | `GCS_PREFIX` | Optional folder inside the bucket |
 | `FRONTEND_DIR` | Folder the backend also serves (local development; default `../frontend`) |
 

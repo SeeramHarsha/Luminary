@@ -202,7 +202,7 @@
       }
       // 3) finished video: qualities, thumbnail picker
       if (v && v.ready) {
-        s.append(h('div', { class: 'row wrap', style: 'margin:6px 0' }, v.renditions.map((r) => h('span', { class: 'chip' }, `${r.h}p · ${mb(r.size)}`))));
+        s.append(h('div', { class: 'row wrap', style: 'margin:6px 0' }, v.renditions.map((r) => h('span', { class: 'chip' }, `${r.h ? r.h + 'p' : 'Original'} · ${mb(r.size)}`))));
         if (v.posters.length) {
           s.append(h('div', { class: 'muted small', style: 'margin:8px 0 6px' }, 'Thumbnail - tap the frame that shows the finished model'),
             h('div', { class: 'posters' }, v.posters.map((u, i) => h('button', { class: 'pst' + (i === v.poster ? ' on' : ''), 'aria-label': `Thumbnail ${i + 1}`, onclick: async () => {
