@@ -45,21 +45,50 @@
   }
 
   // XHR upload with progress, speed and cancel
-  function upload(url, file, onProgress, ctl, raw = false) {
+  function upload(url, file, onProgress, ctl) {
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
       ctl.abort = () => x.abort();
-      x.open(raw ? 'PUT' : 'POST', url);
+      x.open('POST', url);
       const t0 = Date.now();
       x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total, e.loaded / Math.max(0.5, (Date.now() - t0) / 1000), e.loaded, e.total);
       x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch {} x.status < 300 ? resolve(d) : reject(new Error(d.error || 'Upload failed')); };
       x.onerror = () => reject(new Error('Upload failed - check your connection.'));
       x.onabort = () => reject(new Error('cancelled'));
-      if (raw) { x.send(file); return; } // straight to the bucket: the raw file is the body
       const fd = new FormData();
       fd.append('file', file);
       x.send(fd);
     });
+  }
+
+  // Straight to Cloudinary in chunks (large videos are allowed; each chunk is one request)
+  async function uploadCloud(c, file, onProgress, ctl) {
+    const id = Math.random().toString(36).slice(2) + Date.now();
+    const total = file.size;
+    const t0 = Date.now();
+    let start = 0;
+    let aborted = false;
+    let cur = null;
+    ctl.abort = () => { aborted = true; if (cur) cur.abort(); };
+    while (start < total) {
+      if (aborted) throw new Error('cancelled');
+      const end = Math.min(start + c.chunk, total);
+      const base = start;
+      await new Promise((resolve, reject) => {
+        const x = (cur = new XMLHttpRequest());
+        x.open('POST', c.url);
+        if (total > c.chunk) { x.setRequestHeader('X-Unique-Upload-Id', id); x.setRequestHeader('Content-Range', `bytes ${start}-${end - 1}/${total}`); }
+        x.upload.onprogress = (e) => { const done = base + e.loaded; onProgress(Math.min(1, done / total), done / Math.max(0.5, (Date.now() - t0) / 1000), done, total); };
+        x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch {} x.status < 300 ? resolve(d) : reject(new Error((d.error && d.error.message) || 'Upload failed')); };
+        x.onerror = () => reject(new Error('Upload failed - check your connection.'));
+        x.onabort = () => reject(new Error('cancelled'));
+        const fd = new FormData();
+        Object.entries(c.fields).forEach(([k, v]) => fd.append(k, v));
+        fd.append('file', file.slice(start, end), file.name);
+        x.send(fd);
+      });
+      start = end;
+    }
   }
 
   function editModel(model) {
@@ -196,11 +225,11 @@
               const b = el.querySelector('.bar i'); if (b) b.style.width = p * 100 + '%';
               const t = el.querySelector('.slot .small span.grow'); if (t) t.textContent = up.text;
             };
-            // with Google Cloud Storage the file goes straight to the bucket, then the server is told it is there
+            // with Cloudinary the file goes straight there (and is compressed there), then the server is told it is uploaded
             const d = await api(`/api/admin/models/${m.id}/upload-url/${slot}`, { method: 'POST', body: { filename: file.name, type: file.type, size: file.size } });
             let nm;
             if (d.direct) {
-              await upload(d.url, file, onProg, ctl, true);
+              await uploadCloud(d.cloud, file, onProg, ctl);
               nm = await api(`/api/admin/models/${m.id}/file/${slot}/complete`, { method: 'POST', body: { key: d.key } });
             } else nm = await upload(`/api/admin/models/${m.id}/file/${slot}`, file, onProg, ctl);
             up = null;
@@ -322,9 +351,9 @@
         h('label', { class: 'field' }, h('span', {}, 'Current password'), cur), h('label', { class: 'field' }, h('span', {}, 'New password (min 6)'), nw), err,
         h('button', { class: 'btn primary', onclick: async () => { try { await api('/api/admin/password', { method: 'POST', body: { current: cur.value, next: nw.value } }); toast('Password changed'); cur.value = nw.value = ''; err.textContent = ''; refresh(); } catch (e) { err.textContent = e.message; } } }, 'Update password')),
       h('div', { class: 'card' }, h('h2', {}, 'Storage'),
-        h('p', { class: 'muted small' }, A.storage && A.storage.kind === 'gcs'
-          ? `Photos, videos and the database are stored in the Google Cloud Storage bucket gs://${A.storage.bucket}. Videos upload straight to the bucket.`
-          : 'Photos, videos and the database are stored on this server’s disk. Set STORAGE=gcs and GCS_BUCKET to use a Google Cloud Storage bucket instead.')),
+        h('p', { class: 'muted small' }, A.storage && A.storage.kind === 'cloudinary'
+          ? `Photos, videos and the database are stored in Cloudinary (${A.storage.cloudName}). Videos upload straight to Cloudinary, which compresses them.`
+          : 'Photos, videos and the database are stored on this server’s disk. Set CLOUDINARY_URL to store everything in Cloudinary instead.')),
       h('div', { class: 'card' }, h('h2', {}, 'Brand logo'), h('p', { class: 'muted small' }, 'Upload your Luminary logo image (PNG/WebP with a transparent or black background) to replace the built-in wordmark.'),
         h('div', { class: 'row wrap' }, h('button', { class: 'btn sm', onclick: () => pickFile('image/*', async (f) => { try { await upload('/api/admin/logo', f, () => {}, {}); toast('Logo updated'); await loadCatalog(); refresh(); } catch (e) { toast(e.message, true); } }) }, 'Upload logo'),
           A.logo ? h('button', { class: 'btn sm danger', onclick: async () => { await api('/api/admin/logo', { method: 'DELETE' }); await loadCatalog(); refresh(); } }, 'Use built-in wordmark') : null)));

@@ -11,7 +11,7 @@ const video = require('./video');
 const store = require('./storage');
 
 const PORT = process.env.PORT || 3000;
-const { DATA_DIR, UPLOADS } = store; // UPLOADS is only a scratch folder when STORAGE=gcs
+const { DATA_DIR, UPLOADS } = store; // with STORAGE=cloudinary UPLOADS is only a scratch folder
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 1024);
 const SESSION_DAYS = 90;
@@ -39,23 +39,23 @@ function save() {
   fs.renameSync(tmp, DB_FILE);
   store.pushMeta('db.json');
 }
-const seedUploads = []; // seed photos that still have to reach the bucket
+const seedUploads = []; // seed photos that still have to reach Cloudinary
 function seedDb() {
   db = { models: [], profiles: [], users: [], settings: { logo: null } };
   SEED.forEach(([name, description], i) => {
     const m = { id: rid(4), number: i + 1, name, description, files: {} };
     const src = path.join(__dirname, 'seed-images', `m${String(i + 1).padStart(2, '0')}.jpg`);
     if (fs.existsSync(src)) {
-      const file = rid(8) + '.jpg';
+      const file = 'lm_' + rid(8) + '.jpg';
       fs.copyFileSync(src, path.join(UPLOADS, file));
-      seedUploads.push(store.put(file, 'image/jpeg'));
+      seedUploads.push(store.put(file, 'image/jpeg', { photo: true }));
       m.files.image = { file, size: fs.statSync(src).size, type: 'image/jpeg' };
     }
     db.models.push(m);
   });
   db.profiles.push({ id: rid(4), code: rid(5), label: 'All models', mode: 'all', allowed: [] });
   const adminUser = process.env.ADMIN_USER || 'admin';
-  if (store.gcs && !process.env.ADMIN_PASSWORD) throw new Error('Set ADMIN_PASSWORD before the first start with STORAGE=gcs (refusing to create admin/admin123 on a public server).');
+  if (store.cloud && !process.env.ADMIN_PASSWORD) throw new Error('Set ADMIN_PASSWORD before the first start with STORAGE=cloudinary (refusing to create admin/admin123 on a public server).');
   const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
   db.users.push({ id: rid(4), username: adminUser, role: 'admin', profileId: null, ...hashPw(adminPass) });
   save();
@@ -304,7 +304,7 @@ A.get('/state', (req, res) => {
     users: req.sess.role === 'admin' ? db.users.map(adminUserOut) : [],
     logo: !!db.settings.logo,
     me: req.sess.user ? req.sess.user.username : 'Editor link',
-    storage: { kind: store.kind, bucket: store.bucketName || null },
+    storage: { kind: store.kind, cloudName: store.cloudName },
     defaultPassword: !!req.sess.user && checkPw(req.sess.user, 'admin123'),
   });
 });
@@ -341,34 +341,65 @@ async function pump() {
   while (queue.length) await runJob(queue.shift());
   working = false;
 }
+// Cloudinary does the compression: we ask for the versions, wait until they exist, then record them
+async function runCloudJob(job, pend) {
+  const pid = pend.src;
+  const info = await store.videoInfo(pid);
+  if (!info.width || !info.height) throw new Error('This file does not look like a playable video.');
+  const pl = store.plan(pid, info);
+  await store.generate(pid, pl);
+  const names = [...new Set([...pl.renditions, ...pl.posters].map((x) => x.file))];
+  const t0 = Date.now();
+  const done = new Set();
+  while (done.size < names.length) {
+    if (job.cancelled) throw new Error('cancelled');
+    if (Date.now() - t0 > 45 * 60e3) throw new Error('Compression is taking too long - please upload again.');
+    for (const n of names) {
+      if (done.has(n)) continue;
+      const st = await store.ready(n);
+      if (st.state === 'ready') done.add(n);
+      else if (st.state === 'error') throw new Error('Compression failed: ' + st.error);
+    }
+    pend.progress = 0.03 + 0.97 * (done.size / names.length);
+    if (done.size < names.length) await new Promise((r) => setTimeout(r, 3000));
+  }
+  const sz = await store.sizes(pid, names);
+  const landscape = info.width >= info.height;
+  return {
+    renditions: pl.renditions.map((r) => ({ q: r.q, file: r.file, size: sz[r.file] || 0, w: landscape ? Math.round((info.width / info.height) * r.h / 2) * 2 : r.h, h: r.h })),
+    posters: [...new Set(pl.posters.map((p) => p.file))],
+    duration: info.duration, width: info.width, height: info.height,
+  };
+}
 async function runJob(job) {
   const m = findModel(job.modelId);
   const pend = m && m.pending && m.pending[job.slot];
   if (job.cancelled || !pend || pend.id !== job.pid) return;
   const src = path.join(UPLOADS, pend.src);
+  const cloud = store.cloud && pend.remote;
+  let ok = false;
   try {
-    if (pend.remote) await store.fetchLocal(pend.src); // direct-to-bucket upload: pull it down for ffmpeg
-    const made = await video.processVideo({ src, outDir: UPLOADS, job, onProgress: (p) => { pend.progress = p; } });
-    if (job.cancelled || !m.pending || m.pending[job.slot] !== pend) { rmVideo(made); return; }
-    try {
-      await Promise.all([...made.renditions.map((r) => store.put(r.file, 'video/mp4')), ...made.posters.map((f) => store.put(f, 'image/jpeg'))]);
-    } catch (e) { rmVideo(made); throw new Error('Could not save to storage: ' + e.message); }
+    const made = cloud
+      ? await runCloudJob(job, pend)
+      : await video.processVideo({ src, outDir: UPLOADS, job, onProgress: (p) => { pend.progress = p; } });
     if (job.cancelled || !m.pending || m.pending[job.slot] !== pend) { rmVideo(made); return; }
     rmVideo(m.files[job.slot]);
     m.files[job.slot] = { ...made, poster: made.posters.length - 1 };
     delete m.pending[job.slot];
+    ok = true;
     if (!m.files.image && made.posters.length) await setImageFromPoster(m, made.posters[made.posters.length - 1]);
     console.log(`[video] ${m.name} / ${job.slot}: ${made.renditions.map((r) => `${r.q} ${(r.size / 1e6).toFixed(1)}MB`).join(', ')}`);
   } catch (e) {
     if (!job.cancelled && m.pending && m.pending[job.slot] === pend) { pend.status = 'error'; pend.error = e.message; }
   } finally {
     jobs.delete(job.modelId + ':' + job.slot);
-    if (!job.cancelled) { rmName(pend.src); pend.src = null; }
+    // local: the raw upload is always deleted. Cloudinary: it is the source of the compressed versions, so keep it unless the job failed
+    if (!job.cancelled) { if (!(cloud && ok)) rmName(pend.src); pend.src = null; }
     save();
   }
 }
 async function setImageFromPoster(m, posterFile) {
-  const f = rid(8) + '.jpg';
+  const f = 'lm_' + rid(8) + '.jpg';
   const size = await store.copy(posterFile, f);
   rmFile(m.files.image);
   m.files.image = { file: f, size, type: 'image/jpeg' };
@@ -415,7 +446,7 @@ A.delete('/models/:id', (req, res) => {
 const upload = multer({
   storage: multer.diskStorage({
     destination: UPLOADS,
-    filename: (req, file, cb) => cb(null, rid(8) + (path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '') || '')),
+    filename: (req, file, cb) => cb(null, 'lm_' + rid(8) + (path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '') || '')),
   }),
   limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 },
 });
@@ -440,13 +471,18 @@ A.post('/models/:id/file/:slot', upload.single('file'), async (req, res, next) =
       return res.status(400).json({ error: `Please choose a${isImage ? 'n image' : ' video'} file.` });
     }
     if (isImage) {
-      // shrink to a light JPEG up front
-      const out = rid(8) + '.jpg';
-      const ok = await video.optimizeImage(f.path, path.join(UPLOADS, out));
       let rec;
-      if (ok) { bin(); rec = { file: out, size: fs.statSync(path.join(UPLOADS, out)).size, type: 'image/jpeg' }; }
-      else rec = { file: path.basename(f.path), size: f.size, type: f.mimetype };
-      await store.put(rec.file, rec.type);
+      if (store.cloud) {
+        // Cloudinary shrinks it to a light JPEG on upload
+        const r = await store.put(path.basename(f.path), f.mimetype, { photo: true });
+        rec = { file: r.name, size: r.size, type: 'image/jpeg' };
+      } else {
+        // shrink to a light JPEG up front
+        const out = 'lm_' + rid(8) + '.jpg';
+        const ok = await video.optimizeImage(f.path, path.join(UPLOADS, out));
+        if (ok) { bin(); rec = { file: out, size: fs.statSync(path.join(UPLOADS, out)).size, type: 'image/jpeg' }; }
+        else rec = { file: path.basename(f.path), size: f.size, type: f.mimetype };
+      }
       rmFile(m.files.image);
       m.files.image = rec;
       save();
@@ -456,23 +492,22 @@ A.post('/models/:id/file/:slot', upload.single('file'), async (req, res, next) =
     res.json(adminModel(m));
   } catch (e) { next(e); }
 });
-// Direct-to-bucket video upload (STORAGE=gcs): the browser sends the file straight to Cloud Storage,
-// so it never passes through Cloud Run (which caps request bodies at 32 MB).
-const issued = new Map(); // object name -> { modelId, slot, exp }
-A.post('/models/:id/upload-url/:slot', async (req, res, next) => {
+// Direct-to-Cloudinary video upload (STORAGE=cloudinary): the browser sends the file straight to Cloudinary,
+// so it never passes through Cloud Run (which caps request bodies at 32 MB). Cloudinary then compresses it.
+const issued = new Map(); // video id -> { modelId, slot, filename, exp }
+A.post('/models/:id/upload-url/:slot', (req, res, next) => {
   try {
     const m = findModel(req.params.id);
     const slot = req.params.slot;
     if (!m || !SLOT_TYPE[slot] || slot === 'image') return res.status(404).json({ error: 'Not found' });
-    if (!store.gcs) return res.json({ direct: false });
+    if (!store.cloud) return res.json({ direct: false });
     const filename = clean(req.body.filename, 200);
     if (!VIDEO_EXT.test(filename) && !String(req.body.type || '').startsWith('video/')) return res.status(400).json({ error: 'Please choose a video file.' });
     if (Number(req.body.size) > MAX_UPLOAD_MB * 1024 * 1024) return res.status(400).json({ error: `File is larger than ${MAX_UPLOAD_MB} MB.` });
     for (const [k, v] of issued) if (v.exp < Date.now()) issued.delete(k);
-    const name = rid(8) + (path.extname(filename).toLowerCase().replace(/[^.a-z0-9]/g, '') || '.mp4');
-    issued.set(name, { modelId: m.id, slot, filename, exp: Date.now() + 6 * 3600e3 });
-    const url = await store.directUploadUrl(name, String(req.body.type || 'video/mp4'), req.get('origin') || origin(req));
-    res.json({ direct: true, url, key: name });
+    const pid = 'lm_' + rid(8);
+    issued.set(pid, { modelId: m.id, slot, filename, exp: Date.now() + 6 * 3600e3 });
+    res.json({ direct: true, cloud: store.uploadParams(pid), key: pid });
   } catch (e) { next(e); }
 });
 A.post('/models/:id/file/:slot/complete', async (req, res, next) => {
@@ -593,9 +628,9 @@ A.post('/logo', upload.single('file'), async (req, res, next) => {
     const f = req.file;
     // SVG can carry scripts and /brand/logo is same-origin, so only raster formats are accepted
     if (!f || !/^image\/(png|jpe?g|webp|gif)$/.test(f.mimetype)) { if (f) fs.rm(f.path, { force: true }, () => {}); return res.status(400).json({ error: 'Please choose a PNG, JPG or WebP image.' }); }
-    await store.put(path.basename(f.path), f.mimetype);
+    const r = await store.put(path.basename(f.path), f.mimetype);
     rmFile(db.settings.logo);
-    db.settings.logo = { file: path.basename(f.path), type: f.mimetype, size: f.size };
+    db.settings.logo = { file: r.name, type: f.mimetype, size: r.size || f.size };
     save();
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -621,7 +656,7 @@ app.use((err, req, res, next) => {
 });
 
 Promise.all(seedUploads).then(() => {
-  const server = app.listen(PORT, () => console.log(`Luminary running on port ${PORT}  (storage: ${store.gcs ? 'gs://' + store.bucketName : DATA_DIR})`));
-  // Cloud Run sends SIGTERM before stopping the container: make sure db.json reached the bucket
+  const server = app.listen(PORT, () => console.log(`Luminary running on port ${PORT}  (storage: ${store.cloud ? 'Cloudinary ' + store.cloudName : DATA_DIR})`));
+  // Cloud Run sends SIGTERM before stopping the container: make sure db.json reached Cloudinary
   process.on('SIGTERM', () => { server.close(); store.flush().finally(() => process.exit(0)); });
 }).catch((e) => { console.error('Could not upload seed images:', e); process.exit(1); });

@@ -104,4 +104,4 @@ async function optimizeImage(src, dst) {
   return r.code === 0 && fs.existsSync(dst);
 }
 
-module.exports = { processVideo, optimizeImage, probe, FFMPEG };
+module.exports = { processVideo, optimizeImage, probe, FFMPEG, ladderFor, LADDER, POSTER_AT };

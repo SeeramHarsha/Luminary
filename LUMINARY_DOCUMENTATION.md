@@ -164,12 +164,12 @@ Instructors access the management panel via **Account Icon > Admin sign in** or 
 luminary-model-assembly-app/
 ├── backend/                  # deployed to Cloud Run
 │   ├── server.js             # Express REST API, session auth, video queue
-│   ├── start.js              # Entry point (loads db from the bucket, then starts server.js)
-│   ├── storage.js            # Local-disk or Google Cloud Storage backend
-│   ├── video.js              # FFmpeg transcoding ladder & thumbnail extractor
+│   ├── start.js              # Entry point (restores db.json from Cloudinary, then starts server.js)
+│   ├── storage.js            # Local-disk or Cloudinary storage backend
+│   ├── video.js              # FFmpeg ladder (local development only; Cloudinary compresses in production)
 │   ├── seed.js               # Initial dataset containing 32 model kits
 │   ├── seed-images/          # Preloaded stock photos for the 32 models
-│   ├── Dockerfile, cors.json, deploy-backend.sh
+│   ├── Dockerfile
 │   └── data/                 # Local mode only: db.json, secret.txt, uploads/
 ├── frontend/                 # deployed to Cloud Run (nginx)
 │   ├── index.html, app.js, app.css   # Single-page app, routing, styling
@@ -198,25 +198,30 @@ npm start
 ```
 The backend also serves the sibling `frontend/` folder when it exists, so `http://localhost:3000` works as one app (and on your Wi-Fi at `http://<your-ip>:3000`).
 
-### Deploying to Google Cloud: two Cloud Run services + one bucket
+### Deploying to Google Cloud: two Cloud Run services + Cloudinary
 
 | Part | Folder | Runs on |
 | :--- | :--- | :--- |
-| Backend (API, QR rules, FFmpeg) | `backend/` | Cloud Run service `luminary-api` + Cloud Storage bucket |
-| Frontend (the app screens) | `frontend/` | Cloud Run service `luminary-web` (nginx) |
+| Backend (API, QR rules, database) | `backend/` | Cloud Run service (builds from `backend/Dockerfile`) |
+| Frontend (the app screens) | `frontend/` | Cloud Run service (nginx, builds from `frontend/Dockerfile`) |
+| Photos and videos | n/a | Cloudinary (private assets, compressed there) |
 
-The frontend (nginx) forwards `/api`, `/media` and `/brand` to the backend, so visitors see one address. That keeps login cookies, QR links and offline mode working without CORS. Set `BACKEND_URL` and `BACKEND_HOST` on the frontend service, and `TRUST_PROXY=3` on the backend.
+The frontend (nginx) forwards `/api`, `/media` and `/brand` to the backend, so visitors see one address (login cookies, QR links and offline mode work without CORS). Set `BACKEND_URL` and `BACKEND_HOST` on the frontend service.
 
-All photos, videos, `db.json` and the session secret are stored in the bucket (`STORAGE=gcs`). The admin or an editor uploads videos **directly from the browser to the bucket** (avoids Cloud Run's 32 MB request limit); the backend then compresses them with FFmpeg into 360p/540p/720p and saves the results back. Visitors stream media through the backend, so QR locks apply and the bucket stays private.
+**Cloudinary storage.** Set the secret `CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME` on the backend. The admin (or an editor) uploads a video **directly from the browser to Cloudinary** in 20 MB chunks, so it never passes through Cloud Run's 32 MB request limit. Cloudinary compresses it into 360p/540p/720p and five thumbnail candidates; the backend waits until they exist and records them. Everything is stored as private "authenticated" assets: visitors stream through the backend, so the QR locks still apply. The database (`db.json`) is saved to Cloudinary as a private file and restored on start, so a restarted or redeployed container keeps its data.
 
-Cloud Run settings that matter: **1 instance only** (`db.json` is a single file), **CPU always allocated** (background transcoding), **8 GiB memory** (scratch disk is in memory), request timeout 3600 s, `TRUST_PROXY=3` (frontend Cloud Run + backend Cloud Run).
+Backend Cloud Run settings: **1 instance only** (`db.json` is a single file), CPU always allocated (it saves the database in the background), 1 CPU / 1 GiB memory is enough because compression no longer runs on your server, request timeout 3600 s, `TRUST_PROXY=3`.
 
 | Variable | Purpose |
 | :--- | :--- |
-| `STORAGE` | `local` (default, disk) or `gcs` |
-| `GCS_BUCKET` | Bucket name (implies `STORAGE=gcs`) |
-| `GCS_PREFIX` | Optional folder inside the bucket |
+| `CLOUDINARY_URL` (secret) | `cloudinary://API_KEY:API_SECRET@CLOUD_NAME`; turns on Cloudinary storage |
+| `ADMIN_PASSWORD` (secret) | Admin password for the first start |
+| `SESSION_SECRET` (secret, optional) | Cookie signing key; derived from the API secret if unset |
+| `PUBLIC_URL` | Frontend address, used in QR links |
+| `MAX_UPLOAD_MB` | Largest video the admin may upload (also limited by your Cloudinary plan) |
 | `TRUST_PROXY` | Number of proxies in front of the backend (default 1) |
+| `CLOUDINARY_CHUNK_MB` | Upload chunk size in MB (default 20, minimum 5) |
+| `STORAGE` | Leave unset. `local` forces disk storage (development) |
 | `FRONTEND_DIR` | Folder the backend also serves (local development; default `../frontend`) |
 
 ### Default Credentials
