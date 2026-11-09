@@ -177,11 +177,12 @@ const origin = (req) => {
 const imageInfo = (f) => (f ? { url: '/media/' + f.file, size: f.size } : null);
 const selectedPoster = (v) => (v && v.posters && v.posters.length ? v.posters[Math.min(v.poster == null ? v.posters.length - 1 : v.poster, v.posters.length - 1)] : null);
 // what a viewer needs to play a video: only finished renditions, never the original upload
-function videoInfo(v, locked) {
+function videoInfo(v, locked, cover) {
   if (!v || locked || !v.renditions || !v.renditions.length) return null;
   const p = selectedPoster(v);
   return {
-    duration: v.duration, poster: p ? '/media/' + p : null,
+    // the admin's own cover image wins over a frame taken from the video
+    duration: v.duration, poster: cover ? '/media/' + cover.file : p ? '/media/' + p : null,
     renditions: v.renditions.map((r) => ({ q: r.q, h: r.h, size: r.size, url: '/media/' + r.file })),
   };
 }
@@ -230,8 +231,8 @@ app.get('/api/catalog', needAuth, (req, res) => {
     return {
       id: m.id, number: m.number, name: m.name, description: m.description, locked,
       image: imageInfo(m.files.image),
-      working: videoInfo(m.files.working, locked),
-      assembly: videoInfo(m.files.assembly, locked),
+      working: videoInfo(m.files.working, locked, (m.covers || {}).working),
+      assembly: videoInfo(m.files.assembly, locked, (m.covers || {}).assembly),
       busy: !locked && ['working', 'assembly'].some((s) => !m.files[s] && m.pending && m.pending[s] && m.pending[s].status === 'processing'),
     };
   });
@@ -244,6 +245,8 @@ function findMedia(name) {
   for (const m of db.models) {
     if (m.files.image && m.files.image.file === name) return { m, kind: 'image', type: m.files.image.type };
     for (const s of ['working', 'assembly']) {
+      const c = (m.covers || {})[s];
+      if (c && c.file === name) return { m, kind: 'image', type: c.type };
       const v = m.files[s];
       if (!v) continue;
       if ((v.posters || []).includes(name)) return { m, kind: 'poster', type: 'image/jpeg' };
@@ -294,6 +297,8 @@ const adminModel = (m) => ({
     working: adminVideo(m, 'working') || undefined,
     assembly: adminVideo(m, 'assembly') || undefined,
   },
+  // cover image shown on the video itself (separate from the folder image)
+  covers: Object.fromEntries(['working', 'assembly'].map((k) => [k, (m.covers || {})[k] ? { url: '/media/' + m.covers[k].file, size: m.covers[k].size } : undefined])),
 });
 const adminProfile = (p, req) => ({ ...p, link: `${origin(req)}/q/${p.code}` });
 const adminUserOut = (u) => ({ id: u.id, username: u.username, role: u.role, profileId: u.profileId });
@@ -346,6 +351,7 @@ A.delete('/models/:id', (req, res) => {
   const m = findModel(req.params.id);
   if (!m) return res.status(404).json({ error: 'Not found' });
   rmFile(m.files.image); rmVideo(m.files.working); rmVideo(m.files.assembly);
+  Object.values(m.covers || {}).forEach(rmFile);
   db.models = db.models.filter((x) => x !== m);
   db.profiles.forEach((p) => { p.allowed = p.allowed.filter((id) => id !== m.id); });
   save();
@@ -433,6 +439,36 @@ A.post('/models/:id/file/:slot/complete', async (req, res, next) => {
     publishVideo(m, slot, key, st.size);
     res.json(adminModel(m));
   } catch (e) { next(e); }
+});
+// Cover image of one video (working / assembly): shown on the video player, separate from the folder image
+const COVER_SLOTS = ['working', 'assembly'];
+A.post('/models/:id/cover/:slot', upload.single('file'), async (req, res, next) => {
+  try {
+    const f = req.file;
+    const bin = () => f && fs.rm(f.path, { force: true }, () => {});
+    const m = findModel(req.params.id);
+    const slot = req.params.slot;
+    if (!m || !COVER_SLOTS.includes(slot)) { bin(); return res.status(404).json({ error: 'Not found' }); }
+    if (!f) return res.status(400).json({ error: 'No file received.' });
+    if (!f.mimetype.startsWith('image/')) { bin(); return res.status(400).json({ error: 'Please choose an image file.' }); }
+    const out = 'lm_' + rid(8) + '.jpg';
+    const ok = await video.optimizeImage(f.path, path.join(UPLOADS, out), 1280);
+    let rec;
+    if (ok) { bin(); rec = { file: out, size: fs.statSync(path.join(UPLOADS, out)).size, type: 'image/jpeg' }; }
+    else rec = { file: path.basename(f.path), size: f.size, type: f.mimetype };
+    await store.put(rec.file, rec.type);
+    m.covers = m.covers || {};
+    rmFile(m.covers[slot]);
+    m.covers[slot] = rec;
+    save();
+    res.json(adminModel(m));
+  } catch (e) { next(e); }
+});
+A.delete('/models/:id/cover/:slot', (req, res) => {
+  const m = findModel(req.params.id);
+  if (!m || !COVER_SLOTS.includes(req.params.slot)) return res.status(404).json({ error: 'Not found' });
+  if (m.covers && m.covers[req.params.slot]) { rmFile(m.covers[req.params.slot]); delete m.covers[req.params.slot]; save(); }
+  res.json(adminModel(m));
 });
 A.delete('/models/:id/file/:slot', (req, res) => {
   const m = findModel(req.params.id);

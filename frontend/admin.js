@@ -90,7 +90,9 @@
           slots.image = imageSlot(() => m, set);
           slots.working = videoSlot(() => m, 'working', 'Working video', set);
           slots.assembly = videoSlot(() => m, 'assembly', 'Assembly video', set);
-          box.append(slots.image.el, slots.working.el, slots.assembly.el);
+          slots.workingCover = coverSlot(() => m, 'working', 'Working video cover image', set);
+          slots.assemblyCover = coverSlot(() => m, 'assembly', 'Assembly video cover image', set);
+          box.append(slots.image.el, slots.working.el, slots.workingCover.el, slots.assembly.el, slots.assemblyCover.el);
           box.append(h('button', { class: 'btn danger', style: 'width:100%;margin-top:6px', onclick: async () => {
             if (!confirm(`Delete "${m.name}" and all its files?`)) return;
             try { await api(`/api/admin/models/${m.id}`, { method: 'DELETE' }); close(); toast('Deleted'); refresh(); } catch (e) { toast(e.message, true); }
@@ -143,6 +145,29 @@
             catch (e) { bar.hidden = true; status.textContent = ''; toast(e.message, true); }
           }) }, f ? 'Replace' : 'Upload'),
           f ? h('button', { class: 'btn sm danger', onclick: async () => { try { set(await api(`/api/admin/models/${m.id}/file/image`, { method: 'DELETE' })); } catch (e) { toast(e.message, true); } } }, 'Delete') : null));
+      el.replaceChildren(s);
+    };
+    render();
+    return { el, render };
+  }
+
+  // cover image shown on a video (different from the folder image)
+  function coverSlot(get, slot, label, set) {
+    const el = h('div');
+    const render = () => {
+      const m = get();
+      const c = (m.covers || {})[slot];
+      const bar = h('div', { class: 'bar', hidden: true }, h('i'));
+      const status = h('span', { class: 'muted small' }, c ? mb(c.size) : 'Not set (the folder image is used)');
+      const s = slotBox(label, status);
+      s.append(c ? h('img', { class: 'prev', src: c.url, alt: '' }) : null, bar,
+        h('div', { class: 'row wrap', style: 'margin-top:6px' },
+          h('button', { class: 'btn sm', onclick: () => pickFile('image/*', async (file) => {
+            bar.hidden = false; status.textContent = 'Uploading…';
+            try { set(await upload(`/api/admin/models/${m.id}/cover/${slot}`, file, (p) => { bar.firstChild.style.width = p * 100 + '%'; }, {})); toast('Cover image updated'); }
+            catch (e) { bar.hidden = true; status.textContent = ''; toast(e.message, true); }
+          }) }, c ? 'Replace' : 'Upload'),
+          c ? h('button', { class: 'btn sm danger', onclick: async () => { try { set(await api(`/api/admin/models/${m.id}/cover/${slot}`, { method: 'DELETE' })); } catch (e) { toast(e.message, true); } } }, 'Delete') : null));
       el.replaceChildren(s);
     };
     render();

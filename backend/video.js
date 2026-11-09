@@ -15,9 +15,9 @@ function run(args) {
   });
 }
 
-// Shrinks uploaded pictures (max 900px on the long edge, JPEG) so folder images stay light.
-async function optimizeImage(src, dst) {
-  const r = await run(['-y', '-hide_banner', '-i', src, '-frames:v', '1', '-vf', "scale=w='min(900,iw)':h='min(900,ih)':force_original_aspect_ratio=decrease", '-q:v', '4', dst]);
+// Shrinks uploaded pictures (max 900px on the long edge by default, JPEG) so folder images stay light.
+async function optimizeImage(src, dst, max = 900) {
+  const r = await run(['-y', '-hide_banner', '-i', src, '-frames:v', '1', '-vf', `scale=w='min(${max},iw)':h='min(${max},ih)':force_original_aspect_ratio=decrease`, '-q:v', '4', dst]);
   return r.code === 0 && fs.existsSync(dst);
 }
 

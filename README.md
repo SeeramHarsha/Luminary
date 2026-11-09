@@ -31,7 +31,7 @@ Videos are stored exactly as uploaded (MP4, MOV or WebM) and are watchable strai
 so keep files reasonably small (720p to 1080p) to save visitors' mobile data and offline storage.
 
 ## Using it
-- Admin > Models: upload / replace / delete folder image, working video, assembly video; rename or delete folders.
+- Admin > Models: upload / replace / delete the folder image, the working video, the assembly video and a separate cover image for each video (shown on the video; if none is set the folder image is used); rename or delete folders.
   Videos need no processing: a replacement is live as soon as the upload finishes.
 - Admin > QR access: each QR opens the library with its own unlocked set ("Open all models", or tick models; Open all / Lock all buttons). "Download PNG" saves a printable card (QR + label).
 - Admin > Users: create user logins (optionally tied to a QR access set). QR visitors need no login.
