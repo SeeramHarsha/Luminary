@@ -257,3 +257,7 @@ body.cin-open { overflow: hidden; }
 .pl.cin.rot { inset: auto; top: 0; left: 0; width: 100vh; width: 100dvh; height: 100vw; transform-origin: 0 0; transform: translateX(100vw) rotate(90deg); }
 .pl.cin .pl-bot { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
 @media (max-height: 460px) { .pl-bot { padding-top: 14px; } .pl-btn { width: 44px; height: 44px; } .pl-btn.main { width: 52px; height: 52px; } }
+
+/* YouTube embed */
+.ytp { position: absolute; inset: 0; background: #000; }
+.ytp iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }

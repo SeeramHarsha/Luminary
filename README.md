@@ -9,7 +9,7 @@ Light on data, works offline once saved.
 
 First start seeds the 32 models (names, descriptions, photos from the supplier list) and an admin account
 (`admin` / `ADMIN_PASSWORD`; default `admin123` - change it under Admin > Settings).
-Folder photos are shrunk with the bundled `ffmpeg-static` binary (or set `FFMPEG_PATH`). Videos are not processed.
+Folder photos are shrunk with the bundled `ffmpeg-static` binary (or set `FFMPEG_PATH`).
 
 ## Layout
 - `backend/`  Express API and QR rules (deploys to Cloud Run; photos/videos in a bucket)
@@ -17,7 +17,7 @@ Folder photos are shrunk with the bundled `ffmpeg-static` binary (or set `FFMPEG
 
 ## Google Cloud
 Two Cloud Run services (`backend/`, `frontend/`) and a Google Cloud Storage bucket for photos, videos and the database.
-Videos are stored as uploaded (MP4, MOV or WebM), with no compression. See backend/README.md and LUMINARY_DOCUMENTATION.md, section 8.
+Videos are on YouTube. See backend/README.md and LUMINARY_DOCUMENTATION.md, section 8.
 
 ## Host it (HTTPS is required for offline caching / install)
 Any host that runs Node or Docker with a persistent disk: Render, Railway, Fly.io, a VPS.
@@ -27,12 +27,11 @@ Any host that runs Node or Docker with a persistent disk: Render, Railway, Fly.i
 - If you put a proxy (nginx etc.) in front, raise its upload limit (`client_max_body_size`) to match `MAX_UPLOAD_MB`.
 
 ## Videos
-Videos are stored exactly as uploaded (MP4, MOV or WebM) and are watchable straight away. There is no compression,
-so keep files reasonably small (720p to 1080p) to save visitors' mobile data and offline storage.
+Videos are played from YouTube. Upload each video to YouTube (Unlisted is fine; embedding must be allowed), then paste its
+link in Admin > Models next to the working / assembly video. The server stores no video files, so there is nothing to compress.
 
 ## Using it
-- Admin > Models: upload / replace / delete the folder image, the working video, the assembly video and a separate cover image for each video (shown on the video; if none is set the folder image is used); rename or delete folders.
-  Videos need no processing: a replacement is live as soon as the upload finishes.
+- Admin > Models: folder image, a YouTube link for the working video and for the assembly video, and a separate cover image for each video (shown before the video plays; if none is set the folder image is used); rename or delete folders.
 - Admin > QR access: each QR opens the library with its own unlocked set ("Open all models", or tick models; Open all / Lock all buttons). "Download PNG" saves a printable card (QR + label).
 - Admin > Users: create user logins (optionally tied to a QR access set). QR visitors need no login.
 - Admin > Settings: change password, upload the real Luminary logo image.

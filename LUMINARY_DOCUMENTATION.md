@@ -103,7 +103,7 @@ Instructors access the management panel via **Account Icon > Admin sign in** or 
 - **Models Tab**:
   - Add new kits or edit existing folder names, descriptions, and sequence numbers.
   - Upload folder cover photographs.
-  - Upload working and assembly videos (supports any source resolution or phone recording).
+  - Paste the YouTube link of the working video and of the assembly video, and upload a separate cover image for each.
   - **Visual Thumbnail Selector**: Review 5 candidate video frames extracted automatically by the server to pick the thumbnail that best showcases the completed model.
 - **QR Access Tab**:
   - Create, rename, or delete QR code profiles.
@@ -129,16 +129,17 @@ Instructors access the management panel via **Account Icon > Admin sign in** or 
          |                                        v
          |                                 Backend (Express on Cloud Run) -- QR rules, logins, db.json
          |                                        |
-         |-- Download All for Offline <-- streams files (HTTP Range) --  Cloud Storage bucket
-                                                  ^
-[ Admin / Editor ] -- uploads videos straight to the bucket (browser -> bucket)
+         |<-- photos, cover images <-- Cloud Storage bucket
+         |
+         |<-- embedded player -------------- YouTube (the videos)
 ```
 
-### B. Video storage (no compression)
-1. **Stored as uploaded**: a video is published exactly as the admin uploads it. MP4, MOV (H.264) and WebM are accepted, because browsers play them directly. Other formats are refused with a clear message.
-2. **Instant**: nothing is processed, so a video is watchable the moment the upload finishes. There are no thumbnail candidates; the folder photo is used instead.
-3. **Trade-off**: visitors download the original size, so keep files reasonably small (720p to 1080p) to save their mobile data and offline storage.
-4. **Photos** are still shrunk on upload to a JPEG of at most 900 px.
+### B. Videos (YouTube)
+1. **Hosted on YouTube**: the admin uploads each video to YouTube (an **Unlisted** video works, and embedding must be allowed), then pastes its link next to the working or assembly video. Links like `youtube.com/watch?v=`, `youtu.be/`, `/shorts/` and `/embed/` are all understood.
+2. **Played in the app**: visitors see the cover image with a play button; tapping it loads the embedded YouTube player (privacy-enhanced `youtube-nocookie.com`).
+3. **QR locks**: a locked model does not receive the video id at all. Anyone who is allowed to see a model can, of course, find the YouTube link, so use Unlisted rather than Private (Private videos cannot be embedded).
+4. **No upload, no compression, no size limit** on the server. Videos are not available offline; photos and covers still are.
+5. **Cover images**: each video can have its own cover image (Admin > Models), separate from the folder image.
 
 ### C. Security & Data Integrity
 - **Zero Heavy Dependencies**: Operates on a single atomic JSON database (`data/db.json`), ensuring portability without needing external database engines (PostgreSQL, MongoDB, or MySQL).
@@ -158,7 +159,7 @@ luminary-model-assembly-app/
 │   ├── video.js              # ffmpeg helper that shrinks uploaded photos
 │   ├── seed.js               # Initial dataset containing 32 model kits
 │   ├── seed-images/          # Preloaded stock photos for the 32 models
-│   ├── Dockerfile, cors.json (bucket upload CORS)
+│   ├── Dockerfile
 │   └── data/                 # Local mode only: db.json, secret.txt, uploads/
 ├── frontend/                 # deployed to Cloud Run (nginx)
 │   ├── index.html, app.js, app.css   # Single-page app, routing, styling
@@ -171,7 +172,7 @@ luminary-model-assembly-app/
 ```
 
 ### File Locations:
-- **Server Media Storage**: `data/uploads/` (stores uploaded videos and photos when STORAGE is local).
+- **Server Media Storage**: `data/uploads/` (photos and cover images when STORAGE is local).
 - **Database File**: `data/db.json` (stores catalog models, descriptions, user logins, and QR profile access rules).
 - **Client Offline Storage**: Stored inside browser cache under cache partition **`lm-media`**.
 
@@ -197,7 +198,7 @@ The backend also serves the sibling `frontend/` folder when it exists, so `http:
 
 The frontend (nginx) forwards `/api`, `/media` and `/brand` to the backend, so visitors see one address (login cookies, QR links and offline mode work without CORS). Set `BACKEND_URL` and `BACKEND_HOST` on the frontend service.
 
-**Bucket storage** (`GCS_BUCKET=<name>`). The admin or an editor uploads a video **directly from the browser to the bucket** (avoids Cloud Run's 32 MB request limit), so there is no practical size limit. The files stay private: visitors stream them through the backend, so the QR locks still apply. The database (`db.json`) is saved in the bucket and restored on start, so a restarted or redeployed container keeps its data. Requirements: the service runs as a service account with **Storage Object Admin** on the bucket, and the bucket has the CORS rule in `backend/cors.json` (put your frontend address in `origin`; apply with `gcloud storage buckets update gs://BUCKET --cors-file=backend/cors.json`).
+**Bucket storage** (`GCS_BUCKET=<name>`) holds the photos, cover images and `db.json`; the videos are on YouTube. Files stay private: visitors receive them through the backend, so the QR locks still apply. The database (`db.json`) is saved in the bucket and restored on start, so a restarted or redeployed container keeps its data. Requirements: the service runs as a service account with **Storage Object Admin** on the bucket. Keep **1 instance only** (`db.json` is a single file).
 
 Backend Cloud Run settings: **1 instance only** (`db.json` is a single file), CPU always allocated (it saves the database in the background), 1 CPU / 1 GiB memory, `TRUST_PROXY=3`.
 
@@ -207,7 +208,7 @@ Backend Cloud Run settings: **1 instance only** (`db.json` is a single file), CP
 | `ADMIN_PASSWORD` | Admin password for the first start |
 | `SESSION_SECRET` | Optional cookie signing key (stored in the bucket if unset) |
 | `PUBLIC_URL` | Frontend address, used in QR links |
-| `MAX_UPLOAD_MB` | Largest video the admin may upload (e.g. 2048) |
+| `MAX_UPLOAD_MB` | Largest photo upload (default 1024; photos are small, so this rarely matters) |
 | `TRUST_PROXY` | Number of proxies in front of the backend (3 behind two Cloud Run services) |
 | `GCS_PREFIX` | Optional folder inside the bucket |
 | `STORAGE` | Optional: `local` forces disk storage (development) |
@@ -222,5 +223,4 @@ Backend Cloud Run settings: **1 instance only** (`db.json` is a single file), CP
 - `DATA_DIR`: Directory for database and uploads (default: `./data`).
 - `PUBLIC_URL`: Full domain URL for production QR code generation (e.g. `https://models.botclub.in`).
 - `ADMIN_PASSWORD`: Pre-set password for the initial seed admin account.
-- `MAX_UPLOAD_MB`: Maximum raw video upload size in MB (default: `1024`).
 

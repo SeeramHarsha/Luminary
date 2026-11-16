@@ -33,7 +33,37 @@
     return s === 0 ? 0 : s === 1 ? Math.min(1, len - 1) : len - 1;
   }
 
+  // YouTube video: shows the cover first (cheap, no tracking until tapped), then loads the embedded YouTube player
+  function YouTubePlayer(info, opts) {
+    const id = info.youtube;
+    const poster = info.poster || opts.poster || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+    let frame = null;
+    const root = h('div', { class: 'ytp' });
+    const big = h('button', { class: 'pl-big', 'aria-label': 'Play ' + (opts.title || 'video'), onclick: () => start() }, ic('play'));
+    big.style.backgroundImage = `linear-gradient(transparent 40%, rgba(0,0,0,.65)), url("${poster}")`;
+    big.style.backgroundSize = 'cover';
+    big.style.backgroundPosition = 'center';
+    root.append(big);
+    function start() {
+      if (window.LM.activePlayer && window.LM.activePlayer !== api) window.LM.activePlayer.pause();
+      window.LM.activePlayer = api;
+      frame = h('iframe', {
+        src: `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`,
+        title: opts.title || 'Video', allow: 'autoplay; fullscreen; picture-in-picture; encrypted-media', allowfullscreen: '', referrerpolicy: 'strict-origin-when-cross-origin',
+      });
+      root.replaceChildren(frame);
+    }
+    const api = {
+      el: root,
+      pause() { try { if (frame && frame.contentWindow) frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*'); } catch {} },
+      destroy() { if (frame) { try { frame.src = 'about:blank'; } catch {} frame = null; } players.delete(api); if (window.LM.activePlayer === api) window.LM.activePlayer = null; },
+    };
+    players.add(api);
+    return api;
+  }
+
   function Player(info, opts = {}) {
+    if (info.youtube) return YouTubePlayer(info, opts);
     const R = [...info.renditions].sort((a, b) => a.h - b.h);
     let cur = -1;
     let pref = 'auto';

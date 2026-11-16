@@ -13,8 +13,22 @@ const store = require('./storage');
 const PORT = process.env.PORT || 3000;
 const { DATA_DIR, UPLOADS } = store; // with STORAGE=gcs UPLOADS is only a scratch folder
 const DB_FILE = path.join(DATA_DIR, 'db.json');
-// Videos are stored exactly as uploaded (no compression). Only formats browsers play directly are accepted.
-const VIDEO_OK = /\.(mp4|m4v|mov|webm)$/i;
+// Videos live on YouTube: the admin pastes a link and visitors watch it in an embedded player.
+// Pulls the 11-character video id out of any usual YouTube link (watch, youtu.be, shorts, embed, live) or a bare id.
+function youtubeId(input) {
+  const t = String(input || '').trim();
+  if (/^[\w-]{11}$/.test(t)) return t;
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(t) ? t : 'https://' + t); } catch { return null; }
+  const host = u.hostname.replace(/^(www|m|music)\./, '');
+  let id = null;
+  if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    if (u.pathname === '/watch') id = u.searchParams.get('v');
+    else { const m = /^\/(embed|shorts|live|v)\/([\w-]{11})/.exec(u.pathname); if (m) id = m[2]; }
+  }
+  return id && /^[\w-]{11}$/.test(id) ? id : null;
+}
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 1024);
 const SESSION_DAYS = 90;
 
@@ -178,7 +192,10 @@ const imageInfo = (f) => (f ? { url: '/media/' + f.file, size: f.size } : null);
 const selectedPoster = (v) => (v && v.posters && v.posters.length ? v.posters[Math.min(v.poster == null ? v.posters.length - 1 : v.poster, v.posters.length - 1)] : null);
 // what a viewer needs to play a video: only finished renditions, never the original upload
 function videoInfo(v, locked, cover) {
-  if (!v || locked || !v.renditions || !v.renditions.length) return null;
+  if (!v || locked) return null;
+  // YouTube video: the player embeds it (the cover image, if any, is shown until the visitor taps play)
+  if (v.youtube) return { youtube: v.youtube, duration: 0, poster: cover ? '/media/' + cover.file : null, renditions: [] };
+  if (!v.renditions || !v.renditions.length) return null;
   const p = selectedPoster(v);
   return {
     // the admin's own cover image wins over a frame taken from the video
@@ -282,11 +299,12 @@ const adminVideo = (m, s) => {
   const p = m.pending && m.pending[s];
   if (!v && !p) return null;
   return {
-    ready: !!(v && v.renditions && v.renditions.length),
+    ready: !!(v && ((v.renditions && v.renditions.length) || v.youtube)),
+    youtube: v && v.youtube ? v.youtube : undefined,
     duration: v ? v.duration : 0,
-    renditions: v ? v.renditions.map((r) => ({ q: r.q, h: r.h, size: r.size, url: '/media/' + r.file })) : [],
-    posters: v ? v.posters.map((f) => '/media/' + f) : [],
-    poster: v ? Math.min(v.poster == null ? v.posters.length - 1 : v.poster, v.posters.length - 1) : 0,
+    renditions: v && v.renditions ? v.renditions.map((r) => ({ q: r.q, h: r.h, size: r.size, url: '/media/' + r.file })) : [],
+    posters: v && v.posters ? v.posters.map((f) => '/media/' + f) : [],
+    poster: v && v.posters ? Math.min(v.poster == null ? v.posters.length - 1 : v.poster, v.posters.length - 1) : 0,
     pending: p ? { status: p.status, progress: p.progress || 0, error: p.error || null, name: p.name } : null,
   };
 };
@@ -322,12 +340,7 @@ const rmName = (n) => store.remove(n);
 const rmFile = (f) => f && rmName(f.file);
 const rmVideo = (v) => { if (v) { (v.renditions || []).forEach((r) => rmName(r.file)); (v.posters || []).forEach(rmName); } };
 
-// ---- videos: published exactly as uploaded ----
-function publishVideo(m, slot, name, size) {
-  rmVideo(m.files[slot]);
-  m.files[slot] = { renditions: [{ q: 'high', file: name, size, w: 0, h: 0, type: /\.webm$/i.test(name) ? 'video/webm' : 'video/mp4' }], posters: [], duration: 0, width: 0, height: 0, poster: -1 };
-  save();
-}
+// ---- videos: a YouTube link per slot (older uploaded files keep playing until they are replaced) ----
 for (const m of db.models) delete m.pending; // older versions queued compression jobs
 
 A.post('/models', (req, res) => {
@@ -380,10 +393,8 @@ A.post('/models/:id/file/:slot', upload.single('file'), async (req, res, next) =
     if (!m || !t) { bin(); return res.status(404).json({ error: 'Not found' }); }
     if (!f) return res.status(400).json({ error: 'No file received.' });
     const isImage = t === 'image/';
-    if (!(isImage ? f.mimetype.startsWith('image/') : VIDEO_OK.test(f.originalname))) {
-      bin();
-      return res.status(400).json({ error: isImage ? 'Please choose an image file.' : 'Please choose an MP4, MOV or WebM video.' });
-    }
+    if (!isImage) { bin(); return res.status(400).json({ error: 'Videos are added with a YouTube link.' }); }
+    if (!f.mimetype.startsWith('image/')) { bin(); return res.status(400).json({ error: 'Please choose an image file.' }); }
     if (isImage) {
       // shrink to a light JPEG up front
       const out = 'lm_' + rid(8) + '.jpg';
@@ -395,79 +406,20 @@ A.post('/models/:id/file/:slot', upload.single('file'), async (req, res, next) =
       rmFile(m.files.image);
       m.files.image = rec;
       save();
-    } else {
-      const r = await store.put(path.basename(f.path), f.mimetype);
-      publishVideo(m, req.params.slot, r.name, r.size);
     }
     res.json(adminModel(m));
   } catch (e) { next(e); }
 });
-// Direct video upload (STORAGE=gcs): the browser sends the file straight to the bucket,
-// so it never passes through Cloud Run (which caps request bodies at 32 MB). The video is then published as is.
-const issued = new Map(); // video id -> { modelId, slot, filename, exp }
-A.post('/models/:id/upload-url/:slot', async (req, res, next) => {
-  try {
-    const m = findModel(req.params.id);
-    const slot = req.params.slot;
-    if (!m || !SLOT_TYPE[slot] || slot === 'image') return res.status(404).json({ error: 'Not found' });
-    if (!store.remote) return res.json({ direct: false });
-    const filename = clean(req.body.filename, 200);
-    if (!VIDEO_OK.test(filename)) return res.status(400).json({ error: 'Please choose an MP4, MOV or WebM video.' });
-    if (Number(req.body.size) > MAX_UPLOAD_MB * 1024 * 1024) return res.status(400).json({ error: `File is larger than ${MAX_UPLOAD_MB} MB.` });
-    for (const [k, v] of issued) if (v.exp < Date.now()) issued.delete(k);
-    const pid = 'lm_' + rid(8);
-    issued.set(pid, { modelId: m.id, slot, filename, exp: Date.now() + 6 * 3600e3 });
-    // a resumable-upload session; the browser PUTs the raw file to it
-    const name = pid + (path.extname(filename).toLowerCase().replace(/[^.a-z0-9]/g, '') || '.mp4');
-    issued.delete(pid);
-    issued.set(name, { modelId: m.id, slot, filename, exp: Date.now() + 6 * 3600e3 });
-    const url = await store.directUploadUrl(name, String(req.body.type || 'video/mp4'), req.get('origin') || origin(req));
-    res.json({ direct: true, url, key: name });
-  } catch (e) { next(e); }
-});
-A.post('/models/:id/file/:slot/complete', async (req, res, next) => {
-  try {
-    const m = findModel(req.params.id);
-    const slot = req.params.slot;
-    const key = String(req.body.key || '');
-    const grant = issued.get(key);
-    if (!m || !grant || grant.modelId !== m.id || grant.slot !== slot) return res.status(404).json({ error: 'Upload not found - please try again.' });
-    issued.delete(key);
-    const st = await store.stat(key);
-    if (!st || !st.size) return res.status(400).json({ error: 'The upload did not finish - please try again.' });
-    if (st.size > MAX_UPLOAD_MB * 1024 * 1024) { store.remove(key); return res.status(400).json({ error: `File is larger than ${MAX_UPLOAD_MB} MB.` }); }
-    publishVideo(m, slot, key, st.size);
-    res.json(adminModel(m));
-  } catch (e) { next(e); }
-});
-// Cover image of one video (working / assembly): shown on the video player, separate from the folder image
-const COVER_SLOTS = ['working', 'assembly'];
-A.post('/models/:id/cover/:slot', upload.single('file'), async (req, res, next) => {
-  try {
-    const f = req.file;
-    const bin = () => f && fs.rm(f.path, { force: true }, () => {});
-    const m = findModel(req.params.id);
-    const slot = req.params.slot;
-    if (!m || !COVER_SLOTS.includes(slot)) { bin(); return res.status(404).json({ error: 'Not found' }); }
-    if (!f) return res.status(400).json({ error: 'No file received.' });
-    if (!f.mimetype.startsWith('image/')) { bin(); return res.status(400).json({ error: 'Please choose an image file.' }); }
-    const out = 'lm_' + rid(8) + '.jpg';
-    const ok = await video.optimizeImage(f.path, path.join(UPLOADS, out), 1280);
-    let rec;
-    if (ok) { bin(); rec = { file: out, size: fs.statSync(path.join(UPLOADS, out)).size, type: 'image/jpeg' }; }
-    else rec = { file: path.basename(f.path), size: f.size, type: f.mimetype };
-    await store.put(rec.file, rec.type);
-    m.covers = m.covers || {};
-    rmFile(m.covers[slot]);
-    m.covers[slot] = rec;
-    save();
-    res.json(adminModel(m));
-  } catch (e) { next(e); }
-});
-A.delete('/models/:id/cover/:slot', (req, res) => {
+// Add or replace the YouTube video of a slot (working / assembly)
+A.put('/models/:id/youtube/:slot', (req, res) => {
   const m = findModel(req.params.id);
-  if (!m || !COVER_SLOTS.includes(req.params.slot)) return res.status(404).json({ error: 'Not found' });
-  if (m.covers && m.covers[req.params.slot]) { rmFile(m.covers[req.params.slot]); delete m.covers[req.params.slot]; save(); }
+  const slot = req.params.slot;
+  if (!m || !['working', 'assembly'].includes(slot)) return res.status(404).json({ error: 'Not found' });
+  const id = youtubeId(req.body.url);
+  if (!id) return res.status(400).json({ error: 'That does not look like a YouTube link. Paste the video link from YouTube (Share > Copy).' });
+  rmVideo(m.files[slot]);
+  m.files[slot] = { youtube: id, renditions: [], posters: [], duration: 0, poster: -1 };
+  save();
   res.json(adminModel(m));
 });
 A.delete('/models/:id/file/:slot', (req, res) => {

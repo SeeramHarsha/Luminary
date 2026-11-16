@@ -122,11 +122,4 @@ function send(req, res, name, type) {
   });
 }
 
-// ---- direct browser -> bucket uploads (bypasses Cloud Run's 32 MB request limit) ----
-// Returns a resumable-upload session URI the browser can PUT the file to.
-async function directUploadUrl(name, type, origin) {
-  const [uri] = await bucket.file(key(name)).createResumableUpload({ origin, metadata: { contentType: type || 'application/octet-stream' } });
-  return uri;
-}
-
-module.exports = { kind: KIND, gcs: GCS, remote: GCS, bucketName: BUCKET || null, DATA_DIR, UPLOADS, init, pushMeta, flush, put, remove, stat, send, directUploadUrl };
+module.exports = { kind: KIND, gcs: GCS, remote: GCS, bucketName: BUCKET || null, DATA_DIR, UPLOADS, init, pushMeta, flush, put, remove, stat, send };

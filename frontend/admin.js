@@ -41,7 +41,7 @@
       h('button', { class: 'btn sm', onclick: () => editModel(m) }, 'Edit'))));
     return h('div', {}, h('div', { class: 'row', style: 'margin-bottom:14px' }, h('p', { class: 'lead grow', style: 'margin:0' }, `${A.models.length} models`),
       h('button', { class: 'btn primary sm', onclick: () => editModel(null) }, '+ Add model')),
-    h('p', { class: 'muted small', style: 'margin:0 0 14px' }, 'Videos are stored exactly as you upload them (MP4, MOV or WebM). Smaller files load faster for visitors.'), list);
+    h('p', { class: 'muted small', style: 'margin:0 0 14px' }, 'Videos are played from YouTube: upload each video to YouTube (Unlisted is fine, and allow embedding), then paste its link.'), list);
   }
 
   // XHR upload with progress, speed and cancel
@@ -174,66 +174,28 @@
     return { el, render };
   }
 
+  // video = a YouTube link (older uploaded files still play until replaced)
   function videoSlot(get, slot, label, set) {
     const el = h('div');
-    let ctl = null;
-    let up = null; // live upload state { pct, text }
     const render = () => {
       const m = get();
       const v = m.files[slot];
-      const pend = v && v.pending;
-      const s = slotBox(label, h('span', { class: 'muted small' }, v && v.ready ? `${dur(v.duration)} · ${v.renditions.length} qualities` : 'Not set'));
-      // 1) uploading from this browser
-      if (up) {
-        s.append(h('div', { class: 'row small muted', style: 'margin:6px 0' }, h('span', { class: 'grow' }, up.text), h('button', { class: 'btn sm', onclick: () => ctl && ctl.abort() }, 'Cancel')),
-          h('div', { class: 'bar' }, h('i', { style: `width:${up.pct * 100}%` })));
-      } else if (pend && pend.status === 'processing') {
-        // 2) server is compressing
-        s.append(h('div', { class: 'row small muted', style: 'margin:6px 0' }, h('span', { class: 'grow' }, `Compressing${pend.name ? ' ' + pend.name : ''}… ${Math.round(pend.progress * 100)}%`)),
-          h('div', { class: 'bar' }, h('i', { style: `width:${Math.max(3, pend.progress * 100)}%` })),
-          h('p', { class: 'muted small' }, v && v.ready ? 'Visitors keep seeing the current video until the new one is ready.' : 'It appears for visitors as soon as it is ready. You can close this window.'));
-      } else if (pend && pend.status === 'error') {
-        s.append(h('div', { class: 'err' }, pend.error || 'Could not process this video.'));
+      const input = h('input', { class: 'input', type: 'url', inputmode: 'url', autocapitalize: 'none', placeholder: 'Paste the YouTube link', value: v && v.youtube ? `https://youtu.be/${v.youtube}` : '', 'aria-label': label + ' YouTube link' });
+      const status = h('span', { class: 'muted small' }, v && v.ready ? (v.youtube ? 'YouTube video' : 'Old uploaded file') : 'Not set');
+      const s = slotBox(label, status);
+      if (v && v.youtube) s.append(h('img', { class: 'prev', src: `https://i.ytimg.com/vi/${v.youtube}/hqdefault.jpg`, alt: '' }));
+      else if (v && v.ready && v.renditions.length) {
+        s.append(h('p', { class: 'muted small' }, 'This is an old uploaded file. Paste a YouTube link below to replace it.'),
+          h('video', { src: v.renditions[v.renditions.length - 1].url, controls: true, preload: 'none', playsinline: true }));
       }
-      // 3) finished video: qualities, thumbnail picker
-      if (v && v.ready) {
-        s.append(h('div', { class: 'row wrap', style: 'margin:6px 0' }, v.renditions.map((r) => h('span', { class: 'chip' }, `${r.h ? r.h + 'p' : 'Original'} · ${mb(r.size)}`))));
-        if (v.posters.length) {
-          s.append(h('div', { class: 'muted small', style: 'margin:8px 0 6px' }, 'Thumbnail - tap the frame that shows the finished model'),
-            h('div', { class: 'posters' }, v.posters.map((u, i) => h('button', { class: 'pst' + (i === v.poster ? ' on' : ''), 'aria-label': `Thumbnail ${i + 1}`, onclick: async () => {
-              try { set(await api(`/api/admin/models/${m.id}/poster/${slot}`, { method: 'POST', body: { index: i } })); } catch (e) { toast(e.message, true); }
-            } }, h('img', { src: u, alt: '', loading: 'lazy' })))),
-            h('button', { class: 'btn sm', style: 'margin-top:8px', onclick: async () => {
-              try { set(await api(`/api/admin/models/${m.id}/poster/${slot}`, { method: 'POST', body: { index: v.poster, useAsFolderImage: true } })); toast('Folder image updated'); } catch (e) { toast(e.message, true); }
-            } }, 'Use as folder image'));
-        }
-        const mid = v.renditions[Math.min(1, v.renditions.length - 1)];
-        s.append(h('video', { src: mid.url, poster: v.posters[v.poster] || null, controls: true, preload: 'none', playsinline: true }));
-      }
-      s.append(h('div', { class: 'row wrap', style: 'margin-top:6px' },
-        h('button', { class: 'btn sm', disabled: up ? true : null, onclick: () => pickFile('video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm', async (file) => {
-          ctl = {};
-          up = { pct: 0, text: `Uploading ${file.name}…` };
-          render();
-          try {
-            const onProg = (p, bps, done, total) => {
-              up.pct = p; up.text = `Uploading ${Math.round(p * 100)}% · ${mb(done)} of ${mb(total)} · ${mb(bps)}/s`;
-              const b = el.querySelector('.bar i'); if (b) b.style.width = p * 100 + '%';
-              const t = el.querySelector('.slot .small span.grow'); if (t) t.textContent = up.text;
-            };
-            // with a bucket the file goes straight there, then the server is told it is uploaded
-            const d = await api(`/api/admin/models/${m.id}/upload-url/${slot}`, { method: 'POST', body: { filename: file.name, type: file.type, size: file.size } });
-            let nm;
-            if (d.direct) {
-              await upload(d.url, file, onProg, ctl, true);
-              nm = await api(`/api/admin/models/${m.id}/file/${slot}/complete`, { method: 'POST', body: { key: d.key } });
-            } else nm = await upload(`/api/admin/models/${m.id}/file/${slot}`, file, onProg, ctl);
-            up = null;
-            toast('Video uploaded');
-            set(nm);
-          } catch (e) { up = null; render(); if (e.message !== 'cancelled') toast(e.message, true); }
-        }) }, v ? 'Replace' : 'Upload'),
-        v ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Delete the ${label.toLowerCase()}?`)) return; try { set(await api(`/api/admin/models/${m.id}/file/${slot}`, { method: 'DELETE' })); } catch (e) { toast(e.message, true); } } }, 'Delete') : null));
+      s.append(h('label', { class: 'field' }, h('span', {}, 'YouTube link (an Unlisted video works)'), input),
+        h('div', { class: 'row wrap', style: 'margin-top:6px' },
+          h('button', { class: 'btn sm primary', onclick: async () => {
+            try { set(await api(`/api/admin/models/${m.id}/youtube/${slot}`, { method: 'PUT', body: { url: input.value } })); toast('Video saved'); }
+            catch (e) { toast(e.message, true); }
+          } }, v && v.ready ? 'Replace' : 'Save'),
+          v && v.youtube ? h('a', { class: 'btn sm', href: `https://youtu.be/${v.youtube}`, target: '_blank', rel: 'noopener' }, 'Open on YouTube') : null,
+          v ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Remove the ${label.toLowerCase()}?`)) return; try { set(await api(`/api/admin/models/${m.id}/file/${slot}`, { method: 'DELETE' })); } catch (e) { toast(e.message, true); } } }, 'Remove') : null));
       el.replaceChildren(s);
     };
     render();
@@ -348,8 +310,8 @@
         h('button', { class: 'btn primary', onclick: async () => { try { await api('/api/admin/password', { method: 'POST', body: { current: cur.value, next: nw.value } }); toast('Password changed'); cur.value = nw.value = ''; err.textContent = ''; refresh(); } catch (e) { err.textContent = e.message; } } }, 'Update password')),
       h('div', { class: 'card' }, h('h2', {}, 'Storage'),
         h('p', { class: 'muted small' }, A.storage && A.storage.kind === 'gcs'
-          ? `Photos, videos and the database are stored in the Google Cloud Storage bucket gs://${A.storage.bucket}. Videos upload straight to the bucket, with no size limit.`
-          : 'Photos, videos and the database are stored on this server\u2019s disk. Set GCS_BUCKET to use a Google Cloud Storage bucket instead.')),
+          ? `Photos and the database are stored in the Google Cloud Storage bucket gs://${A.storage.bucket}. Videos are played from YouTube.`
+          : 'Photos and the database are stored on this server\u2019s disk. Set GCS_BUCKET to use a Google Cloud Storage bucket instead.')),
       h('div', { class: 'card' }, h('h2', {}, 'Brand logo'), h('p', { class: 'muted small' }, 'Upload your Luminary logo image (PNG/WebP with a transparent or black background) to replace the built-in wordmark.'),
         h('div', { class: 'row wrap' }, h('button', { class: 'btn sm', onclick: () => pickFile('image/*', async (f) => { try { await upload('/api/admin/logo', f, () => {}, {}); toast('Logo updated'); await loadCatalog(); refresh(); } catch (e) { toast(e.message, true); } }) }, 'Upload logo'),
           A.logo ? h('button', { class: 'btn sm danger', onclick: async () => { await api('/api/admin/logo', { method: 'DELETE' }); await loadCatalog(); refresh(); } }, 'Use built-in wordmark') : null)));
