@@ -55,6 +55,9 @@ function save() {
   fs.renameSync(tmp, DB_FILE);
   store.pushMeta('db.json');
 }
+// usage counters are saved a few seconds after the last change (many small events, one write)
+let saveTimer = null;
+const saveSoon = () => { if (!saveTimer) saveTimer = setTimeout(() => { saveTimer = null; save(); }, 10000); };
 const seedUploads = []; // seed photos that still have to reach the bucket
 // every school (access profile) has a unique 4-digit code that visitors type on the sign-in screen
 function genPin() {
@@ -262,6 +265,50 @@ app.post('/api/school', (req, res) => {
   attempts.delete(key);
   setSession(req, res, { r: 'qr', p: p.id });
   res.json({ ok: true, label: p.label, code: p.code });
+});
+
+// ---------- usage tracking (per school, counters only: no names, no personal data) ----------
+// db.stats[profileId] = { visits, views, plays, seconds, first, last, days: { 'YYYY-MM-DD': { v, w, p, s, m: { modelId: [views, plays] } } } }
+const dayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+const lastSeen = new Map(); // 'profile:ip' -> { visit, ping } timestamps, keeps counters honest
+function trackedProfile(sess) {
+  // only school visitors count: not guests, admins or editors
+  if (!sess || sess.via === 'guest' || !sess.profile) return null;
+  return sess.role === 'viewer' || sess.role === 'user' ? sess.profile.id : null;
+}
+app.post('/api/track', (req, res) => {
+  res.json({ ok: true });
+  const pid = trackedProfile(req.sess);
+  if (!pid) return;
+  const { type, m, slot, d: dev } = req.body || {};
+  const now = Date.now();
+  db.stats = db.stats || {};
+  const st = db.stats[pid] || (db.stats[pid] = { visits: 0, views: 0, plays: 0, seconds: 0, first: now, last: now, days: {} });
+  const key = pid + ':' + (typeof dev === 'string' && /^[\w-]{8,40}$/.test(dev) ? dev : req.ip); // per device, so visitors sharing one network are not mixed up
+  const seen = lastSeen.get(key) || {};
+  const dk = dayKey(now);
+  const day = st.days[dk] || (st.days[dk] = { v: 0, w: 0, p: 0, s: 0, m: {} });
+  const model = typeof m === 'string' && findModel(m) ? m : null;
+  if (type === 'visit') {
+    if (seen.visit && now - seen.visit < 30 * 60e3) return; // reloads within 30 minutes are the same visit
+    seen.visit = now; st.visits++; day.v++;
+  } else if (type === 'view') {
+    st.views++; day.w++;
+    if (model) { const e = day.m[model] || (day.m[model] = [0, 0]); e[0]++; }
+  } else if (type === 'play') {
+    st.plays++; day.p++;
+    if (model) { const e = day.m[model] || (day.m[model] = [0, 0]); e[1]++; }
+  } else if (type === 'ping') {
+    // time spent: the page pings every 30 s while someone is really using it
+    if (seen.ping && now - seen.ping < 20000) return; // pings come every 30 s; anything faster is ignored
+    const add = seen.ping ? Math.min(35, Math.round((now - seen.ping) / 1000)) : 15; // first ping of a visit counts half an interval
+    seen.ping = now; st.seconds += add; day.s += add;
+  } else return;
+  st.last = now;
+  lastSeen.set(key, seen);
+  const old = Object.keys(st.days).sort();
+  if (old.length > 400) old.slice(0, old.length - 400).forEach((d) => delete st.days[d]);
+  saveSoon();
 });
 
 app.post('/api/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
@@ -490,9 +537,45 @@ A.delete('/profiles/:id', (req, res) => {
   const p = profileOf(req.params.id);
   if (!p) return res.status(404).json({ error: 'Not found' });
   db.profiles = db.profiles.filter((x) => x !== p);
+  if (db.stats) delete db.stats[p.id];
   db.users.forEach((u) => { if (u.profileId === p.id) u.profileId = null; });
   save();
   res.json({ ok: true });
+});
+// Usage report: one row per school for the last N days
+function usageReport(days) {
+  const since = dayKey(Date.now() - (days - 1) * 864e5);
+  const names = new Map(db.models.map((m) => [m.id, m]));
+  const spark = [];
+  for (let i = 13; i >= 0; i--) spark.push(dayKey(Date.now() - i * 864e5));
+  const rows = db.profiles.filter((p) => !p.editor).map((p) => {
+    const st = (db.stats || {})[p.id];
+    const r = { id: p.id, label: p.label, pin: p.pin, visits: 0, views: 0, plays: 0, seconds: 0, activeDays: 0, last: st ? st.last : null, top: [], spark: spark.map(() => 0) };
+    if (!st) return r;
+    const per = new Map();
+    for (const [d, x] of Object.entries(st.days)) {
+      const i = spark.indexOf(d);
+      if (i >= 0) r.spark[i] = x.s;
+      if (d < since) continue;
+      r.visits += x.v; r.views += x.w; r.plays += x.p; r.seconds += x.s;
+      if (x.v || x.s || x.p || x.w) r.activeDays++;
+      for (const [mid, [vw, pl]] of Object.entries(x.m || {})) { const e = per.get(mid) || [0, 0]; e[0] += vw; e[1] += pl; per.set(mid, e); }
+    }
+    r.top = [...per.entries()].map(([mid, [vw, pl]]) => ({ id: mid, number: names.get(mid) ? names.get(mid).number : 0, name: names.get(mid) ? names.get(mid).name : 'Removed model', views: vw, plays: pl }))
+      .sort((a, b) => b.plays * 2 + b.views - (a.plays * 2 + a.views)).slice(0, 3);
+    return r;
+  });
+  rows.sort((a, b) => b.seconds - a.seconds || b.plays - a.plays);
+  return { days, rows, spark, totals: rows.reduce((t, r) => ({ visits: t.visits + r.visits, views: t.views + r.views, plays: t.plays + r.plays, seconds: t.seconds + r.seconds }), { visits: 0, views: 0, plays: 0, seconds: 0 }) };
+}
+const daysParam = (q) => Math.min(3650, Math.max(1, parseInt(q, 10) || 30));
+A.get('/usage', (req, res) => res.json(usageReport(daysParam(req.query.days))));
+A.get('/usage.csv', (req, res) => {
+  const rep = usageReport(daysParam(req.query.days));
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const lines = [['School', 'School code', 'Visits', 'Model pages opened', 'Videos played', 'Minutes spent', 'Active days', 'Last active (UTC)', 'Most used models'].map(q).join(',')];
+  for (const r of rep.rows) lines.push([r.label, r.pin, r.visits, r.views, r.plays, Math.round(r.seconds / 60), r.activeDays, r.last ? new Date(r.last).toISOString().replace('T', ' ').slice(0, 16) : '', r.top.map((t) => String(t.number).padStart(2, '0') + ' ' + t.name).join('; ')].map(q).join(','));
+  res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="luminary-usage-last-${rep.days}-days.csv"` }).send('\ufeff' + lines.join('\r\n'));
 });
 A.get('/profiles/:id/qr.png', async (req, res) => {
   const p = profileOf(req.params.id);
@@ -578,5 +661,5 @@ app.use((err, req, res, next) => {
 Promise.all(seedUploads).then(() => {
   const server = app.listen(PORT, () => console.log(`Luminary running on port ${PORT}  (storage: ${store.gcs ? 'gs://' + store.bucketName : DATA_DIR})`));
   // Cloud Run sends SIGTERM before stopping the container: make sure db.json reached the bucket
-  process.on('SIGTERM', () => { server.close(); store.flush().finally(() => process.exit(0)); });
+  process.on('SIGTERM', () => { server.close(); if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; save(); } store.flush().finally(() => process.exit(0)); });
 }).catch((e) => { console.error('Could not upload seed images:', e); process.exit(1); });

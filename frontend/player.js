@@ -47,6 +47,7 @@
     function start() {
       if (window.LM.activePlayer && window.LM.activePlayer !== api) window.LM.activePlayer.pause();
       window.LM.activePlayer = api;
+      if (window.LM.track) window.LM.track('play', { m: opts.m, slot: opts.slot });
       frame = h('iframe', {
         src: `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`,
         title: opts.title || 'Video', allow: 'autoplay; fullscreen; picture-in-picture; encrypted-media', allowfullscreen: '', referrerpolicy: 'strict-origin-when-cross-origin',
@@ -181,6 +182,7 @@
       root.classList.remove('idle');
       if (window.LM.activePlayer && window.LM.activePlayer !== api) window.LM.activePlayer.pause();
       window.LM.activePlayer = api;
+      if (window.LM.track) window.LM.track('play', { m: opts.m, slot: opts.slot });
       load(i, 0, true);
       if (isPhone()) enterCinema();
       showUI();

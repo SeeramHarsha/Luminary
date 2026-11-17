@@ -236,6 +236,7 @@
           try { localStorage.setItem('lm_qr', d.code); } catch {}
           await loadMe();
           await loadCatalog();
+          startTracking();
           location.hash = '#/';
           route();
         } catch (ex) { err.textContent = ex.message; btn.disabled = false; input.value = ''; input.focus(); }
@@ -350,9 +351,9 @@
     }
   }
 
-  function videoCard(title, f, poster, busy) {
+  function videoCard(title, f, poster, busy, modelId, slot) {
     const box = f
-      ? h('div', { class: 'vbox' }, LM.Player(f, { title, poster }).el)
+      ? h('div', { class: 'vbox' }, LM.Player(f, { title, poster, m: modelId, slot }).el)
       : h('div', { class: 'vbox none' }, h('div', {}, h('span', { class: 'spark' }), h('div', { class: 'small' }, busy ? 'Being prepared - check back in a moment' : 'Video coming soon')));
     return h('section', { class: 'vcard' }, h('div', { class: 'vh' }, h('b', {}, title), f ? h('span', { class: 'muted small' }, fmtDur(f.duration)) : null), box);
   }
@@ -365,6 +366,7 @@
     const i = ms.findIndex((m) => m.id === id);
     if (i < 0) { location.hash = '#/'; return; }
     const m = ms[i];
+    if (!m.locked) track('view', { m: m.id });
     const back = h('button', { class: 'crumb', onclick: () => (history.length > 1 ? history.back() : (location.hash = '#/')) }, h('span', { html: svg('back') }), 'All models');
     let content;
     if (m.locked) {
@@ -378,7 +380,7 @@
           m.image ? h('div', { class: 'thumb' }, h('img', { src: m.image.url, alt: '' })) : null,
           h('div', {}, h('span', { class: 'chip' }, 'MODEL ' + String(m.number).padStart(2, '0')), h('h1', { style: 'margin-top:6px' }, m.name))),
         m.description ? h('p', { class: 'lead', style: 'max-width:70ch' }, m.description) : null,
-        h('div', { class: 'vids' }, videoCard('Working video', m.working, m.image?.url, m.busy), videoCard('Assembly video', m.assembly, m.image?.url, m.busy)),
+        h('div', { class: 'vids' }, videoCard('Working video', m.working, m.image?.url, m.busy, m.id, 'working'), videoCard('Assembly video', m.assembly, m.image?.url, m.busy, m.id, 'assembly')),
         pager);
     }
     $app.replaceChildren(h('div', { class: 'page' }, header(), h('main', {}, back, content), footer()));
@@ -392,7 +394,19 @@
     const s = h('script', { src, onload: res, onerror: () => { delete scripts[src]; rej(new Error('Could not load ' + src + ' (offline?)')); } });
     document.head.append(s);
   }));
-  const LM = window.LM = { h, api, modal, toast, svg, icon, mb, S, header, footer, logo, loadCatalog, wipeDataCache, updateOfflineDot, offline };
+  // usage tracking: counters per school on the server (visit, model page, video play, time spent)
+  let lastInput = Date.now();
+  ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true }));
+  const deviceId = () => { try { let d = localStorage.getItem('lm_dev'); if (!d) { d = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('lm_dev', d); } return d; } catch { return 'nodevice' + Math.random().toString(36).slice(2); } };
+  const track = (type, extra) => { if (S.me && S.me.via !== 'guest') api('/api/track', { method: 'POST', body: { type, d: deviceId(), ...extra } }).catch(() => {}); };
+  let beat = null;
+  function startTracking() {
+    track('visit');
+    if (beat) return;
+    // every 30 s while the page is open and someone is using it (or a video is open)
+    beat = setInterval(() => { if (document.visibilityState === 'visible' && (Date.now() - lastInput < 120000 || window.LM.activePlayer)) track('ping'); }, 30000);
+  }
+  const LM = window.LM = { h, api, modal, toast, svg, icon, mb, S, header, footer, logo, loadCatalog, wipeDataCache, updateOfflineDot, offline, track };
 
   // ---------- routing ----------
   async function route() {
@@ -429,6 +443,7 @@
   async function start() {
     await loadMe();
     if (S.me.via === 'guest') return route();
+    startTracking();
     try { await loadCatalog(); } catch (e) {}
     if (!S.catalog) return $app.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'box' }, h('p', { class: 'lead' }, 'You are offline and nothing is saved on this device yet. Connect once to download the library.'), h('button', { class: 'btn primary', onclick: () => location.reload() }, 'Try again'))));
     route();

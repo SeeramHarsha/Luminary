@@ -2,7 +2,7 @@
 // Admin panel - loaded on demand so visitors never download it.
 (() => {
   const { h, api, modal, toast, svg, mb, S, header, footer, loadCatalog } = window.LM;
-  const TABS = [['models', 'Models'], ['qr', 'Schools'], ['users', 'Users'], ['settings', 'Settings']];
+  const TABS = [['models', 'Models'], ['qr', 'Schools'], ['usage', 'Usage'], ['users', 'Users'], ['settings', 'Settings']];
   const dur = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '');
   const busy = (m) => ['working', 'assembly'].some((k) => m.files[k] && m.files[k].pending && m.files[k].pending.status === 'processing');
 
@@ -14,8 +14,9 @@
     S.adminTab = tabs.some(([k]) => k === tab) ? tab : 'models';
     let A;
     try { A = S.admin = await api('/api/admin/state'); } catch (e) { toast(e.message, true); return; }
+    if (S.adminTab === 'usage') { try { A.usage = await api('/api/admin/usage?days=' + (S.usageDays || 30)); } catch (e) { toast(e.message, true); return; } }
     const seg = h('div', { class: 'seg tabs' }, tabs.map(([k, n]) => h('button', { class: k === S.adminTab ? 'on' : '', onclick: () => (location.hash = `#/admin/${k}`) }, n)));
-    const body = { models: adminModels, qr: adminQr, users: adminUsers, settings: adminSettings }[S.adminTab](A);
+    const body = { models: adminModels, qr: adminQr, usage: adminUsage, users: adminUsers, settings: adminSettings }[S.adminTab](A);
     document.getElementById('app').replaceChildren(h('div', { class: 'page' }, header(),
       h('main', {}, h('button', { class: 'crumb', onclick: () => { loadCatalog().then(() => (location.hash = '#/')); } }, h('span', { html: svg('back') }), 'Back to library'),
         h('h1', {}, S.me.role === 'admin' ? 'Admin ' : 'Editor ', h('span', { class: 'grad' }, 'panel')), tabs.length > 1 ? seg : null,
@@ -281,6 +282,40 @@
           h('button', { class: 'btn sm', onclick: () => save({ mode: 'all' }, 'All models opened') }, 'Open all'),
           h('button', { class: 'btn sm', onclick: () => save({ mode: 'custom', allowed: [] }, 'All models locked') }, 'Lock all'),
           A.profiles.length > 1 ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Delete "${p.label}"? Its school code and printed QR codes will stop working.`)) return; try { await api(`/api/admin/profiles/${p.id}`, { method: 'DELETE' }); refresh(); } catch (e) { toast(e.message, true); } } }, 'Delete') : null)));
+  }
+
+  // ---------- usage ----------
+  const fmtTime = (s) => (s < 60 ? (s ? s + ' sec' : '0 min') : s < 3600 ? Math.round(s / 60) + ' min' : Math.floor(s / 3600) + ' h ' + String(Math.round((s % 3600) / 60)).padStart(2, '0') + ' min');
+  const ago = (t) => {
+    if (!t) return 'Never';
+    const m = Math.round((Date.now() - t) / 60000);
+    if (m < 2) return 'Just now';
+    if (m < 60) return m + ' min ago';
+    if (m < 1440) return Math.round(m / 60) + ' h ago';
+    return Math.round(m / 1440) + ' days ago';
+  };
+  function adminUsage(A) {
+    const U = A.usage;
+    const range = h('div', { class: 'row wrap', style: 'margin:0 0 14px' }, [[7, '7 days'], [30, '30 days'], [90, '90 days'], [365, '1 year']].map(([n, t]) =>
+      h('button', { class: 'btn sm' + (U.days === n ? ' primary' : ''), onclick: () => { S.usageDays = n; refresh(); } }, t)));
+    const big = (n, l) => h('div', { class: 'card', style: 'flex:1;min-width:120px;text-align:center;padding:14px 8px' }, h('div', { style: 'font-size:26px;font-weight:600' }, n), h('div', { class: 'muted small' }, l));
+    const bars = (arr) => { const mx = Math.max(1, ...arr); return h('div', { style: 'display:flex;align-items:flex-end;gap:2px;height:34px', title: 'Time spent, last 14 days' }, arr.map((v) => h('i', { style: `flex:1;min-height:2px;border-radius:2px;background:linear-gradient(#5b8cff,#8f6bff);opacity:${v ? 1 : 0.18};height:${Math.max(6, (v / mx) * 100)}%` }))); };
+    const cards = U.rows.map((r) => h('div', { class: 'card' },
+      h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, r.label), h('span', { class: 'chip' }, 'Code ' + (r.pin || '-')), h('span', { class: 'muted small' }, 'Last active: ' + ago(r.last))),
+      h('div', { class: 'row wrap', style: 'margin:10px 0;gap:18px' },
+        h('div', {}, h('div', { style: 'font-size:20px;font-weight:600' }, fmtTime(r.seconds)), h('div', { class: 'muted small' }, 'Time spent')),
+        h('div', {}, h('div', { style: 'font-size:20px;font-weight:600' }, r.plays), h('div', { class: 'muted small' }, 'Videos played')),
+        h('div', {}, h('div', { style: 'font-size:20px;font-weight:600' }, r.views), h('div', { class: 'muted small' }, 'Model pages')),
+        h('div', {}, h('div', { style: 'font-size:20px;font-weight:600' }, r.visits), h('div', { class: 'muted small' }, 'Visits')),
+        h('div', {}, h('div', { style: 'font-size:20px;font-weight:600' }, r.activeDays), h('div', { class: 'muted small' }, 'Active days'))),
+      r.seconds || r.plays ? bars(r.spark) : null,
+      r.top.length ? h('div', { class: 'muted small', style: 'margin-top:10px' }, 'Most used: ' + r.top.map((t) => String(t.number).padStart(2, '0') + ' ' + t.name + (t.plays ? ` (${t.plays} ${t.plays === 1 ? 'play' : 'plays'})` : '')).join(' · ')) : h('div', { class: 'muted small', style: 'margin-top:6px' }, 'No activity in this period yet.')));
+    return h('div', {},
+      h('p', { class: 'lead' }, 'How much each school uses Luminary: time spent, videos played and which models they open. Counted per school, with no names or personal data.'),
+      range,
+      h('div', { class: 'row wrap', style: 'gap:10px;margin-bottom:14px' }, big(fmtTime(U.totals.seconds), 'Total time'), big(U.totals.plays, 'Videos played'), big(U.totals.views, 'Model pages'), big(U.totals.visits, 'Visits')),
+      h('button', { class: 'btn sm', style: 'margin-bottom:14px', onclick: () => window.open(`/api/admin/usage.csv?days=${U.days}`, '_blank') }, 'Download CSV'),
+      h('div', { class: 'list' }, cards.length ? cards : h('p', { class: 'muted' }, 'No schools yet.')));
   }
 
   // ---------- users ----------
