@@ -298,6 +298,7 @@
       box.append(...[
         h('h2', {}, isStaff ? (m.name || 'Admin') : isQr ? 'School access' : 'Not signed in'),
         h('p', { class: 'muted' }, isAdmin ? 'Signed in as Administrator' : isStaff ? 'Editor access: you can upload and manage models' : isQr ? `School: ${m.profile?.label || 'Custom'}` : 'Browsing all models · No login required'),
+        S.catalog && S.catalog.models.some((x) => x.plan) ? h('a', { class: 'btn sm', style: 'width:100%;margin-bottom:10px', href: '#/plan', onclick: close }, 'View calendar') : null,
         isStaff ? h('a', { class: 'btn primary', style: 'width:100%;margin-bottom:10px', href: '#/admin', onclick: close }, isAdmin ? 'Open admin panel' : 'Manage models') : null,
         isAdmin
           ? h('button', { class: 'btn danger sm', style: 'width:100%;margin-bottom:10px', onclick: async () => { close(); await logout(); } }, 'Sign out')
@@ -443,7 +444,9 @@
     const sync = h('div', { class: 'banner', hidden: true });
     $app.replaceChildren(h('div', { class: 'page' }, header(), h('main', {},
       h('h1', {}, 'Model ', h('span', { class: 'grad' }, 'library')),
-      h('p', { class: 'lead' }, `${c.models.length} models` + (open < c.models.length ? ` · ${open} unlocked` : '')),
+      h('div', { class: 'row wrap', style: 'align-items:center;gap:12px;margin-bottom:6px' },
+        h('p', { class: 'lead grow', style: 'margin:0' }, `${c.models.length} models` + (open < c.models.length ? ` · ${open} unlocked` : '')),
+        c.models.some((m) => m.plan) ? h('a', { class: 'btn primary sm', href: '#/plan' }, 'View calendar') : null),
       sync,
       planCard(c),
       h('div', { class: 'tools' }, h('div', { class: 'search', html: svg('search') }, search)),

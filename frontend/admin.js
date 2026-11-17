@@ -282,6 +282,7 @@
           h('button', { class: 'btn primary sm', onclick: () => save({ label: label.value, mode, allowed: [...sel], editor: editor.checked, pin: editor.checked ? undefined : pinIn.value }) }, 'Save'),
           h('button', { class: 'btn sm', onclick: () => save({ mode: 'all' }, 'All models opened') }, 'Open all'),
           h('button', { class: 'btn sm', onclick: () => save({ mode: 'custom', allowed: [] }, 'All models locked') }, 'Lock all'),
+          !p.editor ? h('button', { class: 'btn sm', onclick: () => { S.calSchool = p.id; S.calEdit = false; location.hash = '#/admin/calendar'; } }, p.calendar && p.calendar.length ? 'View calendar' : 'Set up calendar') : null,
           A.profiles.length > 1 ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Delete "${p.label}"? Its school code and printed QR codes will stop working.`)) return; try { await api(`/api/admin/profiles/${p.id}`, { method: 'DELETE' }); refresh(); } catch (e) { toast(e.message, true); } } }, 'Delete') : null)));
   }
 
@@ -291,7 +292,7 @@
     const C = A.cal;
     const sel = C.schools.find((x) => x.id === S.calSchool) || null;
     const attention = (x) => x.summary.missed * 3 + x.summary.late * 2 + x.summary.due;
-    const go = (id) => { S.calSchool = id; refresh(); };
+    const go = (id, edit) => { S.calSchool = id; S.calEdit = !!edit; refresh(); };
     const call = async (url, method, body, msg) => { try { await api(url, { method, body }); if (msg) toast(msg); refresh(); } catch (e) { toast(e.message, true); } };
 
     if (!sel) {
@@ -300,10 +301,13 @@
         const pct = m.total ? Math.round((m.opened / m.total) * 100) : 0;
         const chips = [['missed', m.missed], ['late', m.late], ['due', m.due], ['upcoming', m.upcoming]].filter(([, n]) => n)
           .map(([k, n]) => h('span', { class: 'chip', style: `border-color:${CAL_CHIP[k][1]};color:${CAL_CHIP[k][1]}` }, `${n} ${CAL_CHIP[k][0]}`));
-        return h('div', { class: 'card', style: 'cursor:pointer', onclick: () => go(x.id) },
+        return h('div', { class: 'card', style: 'cursor:pointer', onclick: () => go(x.id, !m.total) },
           h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, x.label), h('span', { class: 'muted small' }, m.total ? `${m.opened} of ${m.total} sessions done` : 'No calendar yet')),
           m.total ? h('div', { class: 'bar', style: 'margin:10px 0' }, h('i', { style: `width:${pct}%` })) : null,
-          chips.length ? h('div', { class: 'row wrap', style: 'gap:6px' }, chips) : null);
+          chips.length ? h('div', { class: 'row wrap', style: 'gap:6px' }, chips) : null,
+          h('div', { class: 'row wrap', style: 'margin-top:10px;gap:8px' },
+            h('button', { class: 'btn primary sm', onclick: (e) => { e.stopPropagation(); go(x.id, !m.total); } }, m.total ? 'View calendar' : 'Set up calendar'),
+            m.total ? h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); go(x.id, true); } }, 'Edit calendar') : null));
       });
       return h('div', {},
         h('p', { class: 'lead' }, 'Each school has an academic calendar like its plan: month by month, which grade and chapter, which models, and in which dates. Luminary checks the usage and shows whether the models were opened in time. Schools that are behind are listed first.'),
@@ -328,15 +332,19 @@
     const startIn = h('input', { class: 'input', type: 'date', value: C.today, 'aria-label': 'Start date' });
     const daysIn = h('input', { class: 'input', type: 'number', min: 1, max: 120, value: 7, 'aria-label': 'Days per model', style: 'max-width:110px' });
     const copyTo = h('select', { class: 'input', 'aria-label': 'Copy to' }, [h('option', { value: 'all' }, 'All other schools')].concat(C.schools.filter((x) => x.id !== sel.id).map((x) => h('option', { value: x.id }, x.label))));
-    const table = window.LM.calPage(sel, { admin: {
+    const editing = !!S.calEdit || !sel.entries.length; // View = read-only, exactly what the school sees. Edit = change dates, remove rows, planning tools
+    const table = window.LM.calPage(sel, editing ? { admin: {
       onDates: (id, from, to) => call(`/api/admin/profiles/${sel.id}/calendar/${id}`, 'PATCH', { from, to }, 'Dates saved'),
       onRemove: (id) => { if (confirm('Remove this row from the calendar?')) call(`/api/admin/profiles/${sel.id}/calendar/${id}`, 'DELETE', undefined, 'Removed'); },
-    } });
+    } } : { link: true });
     const summary = m.total ? `${m.opened} of ${m.total} sessions done${m.missed ? ' · ' + m.missed + ' delayed' : ''}${m.late ? ' · ' + m.late + ' done late' : ''}${m.due ? ' · ' + m.due + ' due now' : ''}${m.upcoming ? ' · ' + m.upcoming + ' upcoming' : ''}` : 'No calendar yet. Import a calendar file, create a plan below, or add models one by one.';
-    return h('div', {},
+    const out = h('div', {},
       h('button', { class: 'crumb', onclick: () => go(null) }, h('span', { html: svg('back') }), 'All schools'),
       h('h2', { style: 'margin:6px 0 4px' }, sel.label),
       h('p', { class: 'muted small' }, summary),
+      sel.entries.length ? h('div', { class: 'row wrap', style: 'margin:8px 0 14px;gap:10px;align-items:center' },
+        h('button', { class: 'btn primary sm', onclick: () => { S.calEdit = !editing; refresh(); } }, editing ? 'View calendar' : 'Edit calendar'),
+        h('span', { class: 'muted small' }, editing ? 'Edit mode: change dates, remove rows, or use the planning tools below.' : 'View mode: this is what the school sees. Nothing can be changed here.')) : null,
       sel.entries.length ? table : null,
       h('div', { class: 'card', style: 'margin-top:20px' }, h('h3', { style: 'margin:0 0 6px' }, 'Create a simple plan'),
         h('p', { class: 'muted small' }, 'Models one after another, in number order, with the days you choose for each. This replaces the calendar of this school (only the models it can open are used).'),
@@ -348,6 +356,8 @@
           h('button', { class: 'btn primary sm', onclick: () => call(`/api/admin/profiles/${sel.id}/calendar`, 'POST', { model: mSel.value, from: fromIn.value, to: toIn.value }, 'Added') }, 'Add'))),
       sel.entries.length ? h('div', { class: 'card' }, h('div', { class: 'row wrap', style: 'gap:8px;align-items:center' }, h('span', { class: 'muted small' }, 'Copy this calendar to'), copyTo,
         h('button', { class: 'btn sm', onclick: () => { if (!confirm('Replace the calendar of the chosen school(s) with this one?')) return; call('/api/admin/calendar/copy', 'POST', { from: sel.id, to: copyTo.value }, 'Calendar copied'); } }, 'Copy'))) : null);
+    if (!editing) while (out.children.length > 5) out.lastElementChild.remove(); // view mode: the calendar only
+    return out;
   }
 
   // ---------- usage ----------
