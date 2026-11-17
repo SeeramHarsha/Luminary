@@ -288,7 +288,7 @@
   // ---------- academic calendar ----------
   const CAL = {
     done: ['Opened in time', '#2fbf71'], early: ['Opened before its dates', '#2fbf71'], due: ['Due now · not opened yet', '#f5a524'],
-    upcoming: ['Upcoming', '#7a8cff'], late: ['Opened late', '#ff8a3d'], missed: ['Not opened', '#ff5d6c'],
+    upcoming: ['Upcoming', '#7a8cff'], late: ['Opened late', '#ff8a3d'], missed: ['Not opened', '#ff5d6c'], untracked: ['Before tracking started', '#8a8fa3'],
   };
   const calBadge = (st) => h('span', { class: 'chip', style: `border-color:${CAL[st][1]};color:${CAL[st][1]}` }, CAL[st][0]);
   const fmtDay = (x) => (x ? new Date(x + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
@@ -303,7 +303,7 @@
       const cards = [...C.schools].sort((a, b) => attention(b) - attention(a)).map((x) => {
         const m = x.summary;
         const pct = m.total ? Math.round((m.opened / m.total) * 100) : 0;
-        const chips = [m.missed ? ['missed', m.missed] : null, m.late ? ['late', m.late] : null, m.due ? ['due', m.due] : null, m.upcoming ? ['upcoming', m.upcoming] : null].filter(Boolean)
+        const chips = [m.missed ? ['missed', m.missed] : null, m.late ? ['late', m.late] : null, m.due ? ['due', m.due] : null, m.upcoming ? ['upcoming', m.upcoming] : null, m.untracked ? ['untracked', m.untracked] : null].filter(Boolean)
           .map(([k, n]) => h('span', { class: 'chip', style: `border-color:${CAL[k][1]};color:${CAL[k][1]}` }, `${n} ${CAL[k][0].split(' ·')[0].toLowerCase()}`));
         return h('div', { class: 'card', style: 'cursor:pointer', onclick: () => go(x.id) },
           h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, x.label), h('span', { class: 'muted small' }, m.total ? `${m.opened} of ${m.total} models opened` : 'No calendar yet')),
@@ -312,7 +312,16 @@
       });
       return h('div', {},
         h('p', { class: 'lead' }, 'Give each school an academic calendar: which model it should cover, and in which dates. Luminary then checks the usage and shows whether the model was opened in time. Schools that are behind are listed first.'),
-        h('div', { class: 'row wrap', style: 'margin-bottom:14px' }, h('button', { class: 'btn sm', onclick: () => window.open('/api/admin/calendar.csv', '_blank') }, 'Download status as CSV')),
+        h('div', { class: 'row wrap', style: 'margin-bottom:14px;gap:8px' },
+          h('button', { class: 'btn sm', onclick: () => window.open('/api/admin/calendar.csv', '_blank') }, 'Download status as CSV'),
+          h('button', { class: 'btn sm', onclick: () => pickFile('.json,application/json', async (file) => {
+            try {
+              const r = await api('/api/admin/calendar/import', { method: 'POST', body: JSON.parse(await file.text()) });
+              S.calSchool = r.id;
+              toast(`${r.school}: ${r.entries} calendar entries ${r.created ? 'added (new school, code ' + r.pin + ')' : 'replaced'}` + (r.skipped.length ? `; models ${r.skipped.join(', ')} not found` : ''));
+              refresh();
+            } catch (e) { toast(e instanceof SyntaxError ? 'That file is not a valid calendar file.' : e.message, true); }
+          }) }, 'Import a school calendar (file)')),
         h('div', { class: 'list' }, cards.length ? cards : h('p', { class: 'muted' }, 'No schools yet. Create one in the Schools tab.')));
     }
 
@@ -330,17 +339,19 @@
       const detail = e.status === 'done' ? `Opened ${fmtDay(e.first)} · ${e.plays} video ${e.plays === 1 ? 'play' : 'plays'}`
         : e.status === 'early' ? `First opened ${fmtDay(e.first)}, before its dates`
         : e.status === 'late' ? `First opened ${fmtDay(e.first)}, after its dates`
+        : e.status === 'untracked' ? 'Its dates were over before this school was added, so it is not counted.'
         : e.status === 'due' ? (e.earlyOpen ? `Opened earlier on ${fmtDay(e.first)}, not yet in its dates` : 'Not opened yet') : e.status === 'missed' ? 'Never opened' : '';
       return h('div', { class: 'card' },
         h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, `${String(e.number).padStart(2, '0')} · ${e.name}`), calBadge(e.status)),
         h('div', { class: 'row wrap', style: 'margin:8px 0;gap:8px;align-items:center' }, f, h('span', { class: 'muted small' }, 'to'), t,
           h('button', { class: 'btn sm danger', onclick: () => call(`/api/admin/profiles/${sel.id}/calendar/${e.id}`, 'DELETE', undefined, 'Removed') }, 'Remove')),
-        detail ? h('div', { class: 'muted small' }, detail) : null);
+        detail ? h('div', { class: 'muted small' }, detail) : null,
+        e.note ? h('div', { class: 'small', style: 'margin-top:4px' }, e.note) : null);
     });
     const out = h('div', {},
       h('button', { class: 'crumb', onclick: () => go(null) }, h('span', { html: svg('back') }), 'All schools'),
       h('h2', { style: 'margin:6px 0 4px' }, sel.label),
-      h('p', { class: 'muted small' }, m.total ? `${m.opened} of ${m.total} models opened${m.missed ? ' · ' + m.missed + ' not opened' : ''}${m.late ? ' · ' + m.late + ' late' : ''}${m.due ? ' · ' + m.due + ' due now' : ''}${m.upcoming ? ' · ' + m.upcoming + ' upcoming' : ''}` : 'No calendar yet. Create a plan below, or add models one by one.'),
+      h('p', { class: 'muted small' }, m.total ? `${m.opened} of ${m.total} models opened${m.missed ? ' · ' + m.missed + ' not opened' : ''}${m.late ? ' · ' + m.late + ' late' : ''}${m.due ? ' · ' + m.due + ' due now' : ''}${m.upcoming ? ' · ' + m.upcoming + ' upcoming' : ''}${m.untracked ? ' · ' + m.untracked + ' before tracking started' : ''}` : 'No calendar yet. Create a plan below, or add models one by one.'),
       h('div', { class: 'card' }, h('h3', { style: 'margin:0 0 6px' }, 'Create a plan'),
         h('p', { class: 'muted small' }, 'Models one after another, in number order, with the days you choose for each. This replaces the calendar of this school (only the models it can open are used).'),
         h('div', { class: 'row wrap', style: 'gap:8px;align-items:end' }, h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'First day'), startIn), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'Days per model'), daysIn),

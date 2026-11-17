@@ -81,7 +81,7 @@ function seedDb() {
     }
     db.models.push(m);
   });
-  db.profiles.push({ id: rid(4), code: rid(5), pin: genPin(), label: 'All models', mode: 'all', allowed: [] });
+  db.profiles.push({ id: rid(4), code: rid(5), pin: genPin(), label: 'All models', mode: 'all', allowed: [], created: Date.now() });
   const adminUser = process.env.ADMIN_USER || 'admin';
   if (store.remote && !process.env.ADMIN_PASSWORD) throw new Error('Set ADMIN_PASSWORD before the first start with STORAGE=' + store.kind + ' (refusing to create admin/admin123 on a public server).');
   const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
@@ -321,9 +321,10 @@ function planFor(sess) {
   const rank = { now: 0, overdue: 1, next: 2, done: 3 };
   const map = new Map();
   for (const e of calendarReport(p).entries) {
+    if (e.status === 'untracked') continue;
     const state = e.status === 'due' ? 'now' : e.status === 'upcoming' ? 'next' : e.status === 'missed' ? 'overdue' : 'done'; // opened late still counts as opened
     const prev = map.get(e.model);
-    if (!prev || rank[state] < rank[prev.state] || (state === prev.state && e.from < prev.from)) map.set(e.model, { from: e.from, to: e.to, state });
+    if (!prev || rank[state] < rank[prev.state] || (state === prev.state && e.from < prev.from)) map.set(e.model, { from: e.from, to: e.to, state, note: e.note });
   }
   return map;
 }
@@ -523,7 +524,7 @@ A.delete('/models/:id/file/:slot', (req, res) => {
 // QR access profiles: each QR code opens the library with its own set of unlocked models
 const validIds = (ids) => (Array.isArray(ids) ? ids.filter((id) => findModel(id)) : []);
 A.post('/profiles', (req, res) => {
-  const p = { id: rid(4), code: rid(5), label: clean(req.body.label, 60) || 'New school', mode: req.body.mode === 'custom' ? 'custom' : 'all', allowed: validIds(req.body.allowed), editor: req.body.editor === true };
+  const p = { id: rid(4), code: rid(5), label: clean(req.body.label, 60) || 'New school', mode: req.body.mode === 'custom' ? 'custom' : 'all', allowed: validIds(req.body.allowed), editor: req.body.editor === true, created: Date.now() };
   p.pin = p.editor ? null : genPin();
   db.profiles.push(p);
   save();
@@ -567,6 +568,7 @@ function calendarReport(p, today = dayKey()) {
   const days = ((db.stats || {})[p.id] || {}).days || {};
   const act = {}; // model -> [[day, views, plays]]
   for (const [d, x] of Object.entries(days)) for (const [mid, [v, pl]] of Object.entries(x.m || {})) if (v || pl) (act[mid] = act[mid] || []).push([d, v, pl]);
+  const startDay = p.created ? dayKey(p.created) : '0000-00-00'; // usage is only counted from the day the school was added
   const entries = (p.calendar || []).map((e) => {
     let views = 0; let plays = 0; let firstIn = null; let firstEarly = null; let firstLate = null;
     for (const [d, v, pl] of act[e.model] || []) {
@@ -576,14 +578,15 @@ function calendarReport(p, today = dayKey()) {
     }
     let status;
     if (firstIn) status = 'done'; // opened inside its dates
+    else if (e.to < startDay) status = 'untracked'; // its dates were over before the school was added: cannot be judged, whatever happens later
     else if (today < e.from) status = firstEarly ? 'early' : 'upcoming';
     else if (today <= e.to) status = 'due'; // its dates are running and it has not been opened yet
-    else status = firstEarly ? 'early' : firstLate ? 'late' : 'missed';
+    else status = firstEarly ? 'early' : firstLate ? 'late' : e.to < startDay ? 'untracked' : 'missed'; // dates over before tracking began: cannot be judged
     const m = findModel(e.model);
-    return { id: e.id, model: e.model, number: m ? m.number : 0, name: m ? m.name : 'Removed model', from: e.from, to: e.to, status, views, plays, first: firstIn || firstEarly || firstLate, earlyOpen: !!firstEarly };
+    return { id: e.id, model: e.model, number: m ? m.number : 0, name: m ? m.name : 'Removed model', from: e.from, to: e.to, note: e.note || '', status, views, plays, first: firstIn || firstEarly || firstLate, earlyOpen: !!firstEarly };
   }).sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.number - b.number));
   const n = (k) => entries.filter((e) => e.status === k).length;
-  return { entries, summary: { total: entries.length, opened: n('done') + n('early'), late: n('late'), missed: n('missed'), due: n('due'), upcoming: n('upcoming') } };
+  return { entries, summary: { total: entries.length - n('untracked'), opened: n('done') + n('early'), late: n('late'), missed: n('missed'), due: n('due'), upcoming: n('upcoming'), untracked: n('untracked') } };
 }
 const schoolOf = (id) => { const p = profileOf(id); return p && !p.editor ? p : null; };
 const planModels = (p) => [...db.models].sort((a, b) => a.number - b.number).filter((m) => p.mode === 'all' || (p.allowed || []).includes(m.id));
@@ -600,10 +603,10 @@ A.get('/calendar', (req, res) => {
 });
 A.get('/calendar.csv', (req, res) => {
   const today = dayKey();
-  const label = { done: 'Opened in time', early: 'Opened before its dates', due: 'Due now - not opened', upcoming: 'Upcoming', late: 'Opened late', missed: 'Not opened' };
+  const label = { done: 'Opened in time', early: 'Opened before its dates', due: 'Due now - not opened', upcoming: 'Upcoming', late: 'Opened late', missed: 'Not opened', untracked: 'Before tracking started' };
   const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const lines = [['School', 'School code', 'Model no.', 'Model', 'From', 'To', 'Status', 'First opened (UTC date)', 'Model pages opened in the dates', 'Videos played in the dates'].map(q).join(',')];
-  for (const p of db.profiles.filter((x) => !x.editor)) for (const e of calendarReport(p, today).entries) lines.push([p.label, p.pin, e.number, e.name, e.from, e.to, label[e.status], e.first || '', e.views, e.plays].map(q).join(','));
+  const lines = [['School', 'School code', 'Model no.', 'Model', 'From', 'To', 'Status', 'First opened (UTC date)', 'Model pages opened in the dates', 'Videos played in the dates', 'Note'].map(q).join(',')];
+  for (const p of db.profiles.filter((x) => !x.editor)) for (const e of calendarReport(p, today).entries) lines.push([p.label, p.pin, e.number, e.name, e.from, e.to, label[e.status], e.first || '', e.views, e.plays, e.note].map(q).join(','));
   res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="luminary-calendar-status.csv"' }).send('\ufeff' + lines.join('\r\n'));
 });
 A.post('/profiles/:id/calendar', (req, res) => {
@@ -614,7 +617,7 @@ A.post('/profiles/:id/calendar', (req, res) => {
   if (err) return res.status(400).json({ error: err });
   p.calendar = p.calendar || [];
   if (p.calendar.length >= 300) return res.status(400).json({ error: 'A calendar can have up to 300 entries.' });
-  p.calendar.push({ id: rid(4), model: b.model, from: b.from, to: b.to });
+  p.calendar.push({ id: rid(4), model: b.model, from: b.from, to: b.to, note: clean(b.note, 300) });
   save();
   res.json({ ok: true });
 });
@@ -626,6 +629,7 @@ A.patch('/profiles/:id/calendar/:eid', (req, res) => {
   const err = checkEntry(nb, p);
   if (err) return res.status(400).json({ error: err });
   Object.assign(e, nb);
+  if (req.body.note !== undefined) e.note = clean(req.body.note, 300);
   save();
   res.json({ ok: true });
 });
@@ -635,6 +639,36 @@ A.delete('/profiles/:id/calendar/:eid', (req, res) => {
   p.calendar = (p.calendar || []).filter((x) => x.id !== req.params.eid);
   save();
   res.json({ ok: true });
+});
+// import: { school, mode?, entries: [{ model: <model number>, from, to, note? }] } -> creates the school if needed and replaces its calendar
+A.post('/calendar/import', (req, res) => {
+  const b = req.body || {};
+  const name = clean(b.school, 60);
+  if (!name) return res.status(400).json({ error: 'The file has no school name.' });
+  const list = Array.isArray(b.entries) ? b.entries : [];
+  if (!list.length || list.length > 600) return res.status(400).json({ error: 'The file must contain between 1 and 600 calendar entries.' });
+  const byNumber = new Map(db.models.map((m) => [m.number, m]));
+  const entries = [];
+  const skipped = [];
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i] || {};
+    if (!isDate(e.from) || !isDate(e.to) || e.to < e.from) return res.status(400).json({ error: `Entry ${i + 1}: please check the dates.` });
+    const m = byNumber.get(Number(e.model));
+    if (!m) { skipped.push(Number(e.model)); continue; }
+    entries.push({ id: rid(4), model: m.id, from: e.from, to: e.to, note: clean(e.note, 300) });
+  }
+  if (!entries.length) return res.status(400).json({ error: 'None of the models in the file exist here.' });
+  let p = db.profiles.find((x) => !x.editor && x.label.toLowerCase() === name.toLowerCase());
+  const created = !p;
+  if (!p) {
+    p = { id: rid(4), code: rid(5), label: name, mode: b.mode === 'custom' ? 'custom' : 'all', allowed: [], editor: false, created: Date.now() };
+    if (p.mode === 'custom') p.allowed = [...new Set(entries.map((e) => e.model))];
+    p.pin = genPin();
+    db.profiles.push(p);
+  }
+  p.calendar = entries.filter((e) => p.mode === 'all' || (p.allowed || []).includes(e.model));
+  save();
+  res.json({ ok: true, id: p.id, school: p.label, pin: p.pin, created, entries: p.calendar.length, skipped: [...new Set(skipped)] });
 });
 // plan: one model after another, N days each, starting on a date (for one school or all of them)
 A.post('/calendar/plan', (req, res) => {

@@ -1,0 +1,571 @@
+{
+ "school": "Navy Children School",
+ "mode": "all",
+ "info": "NCS Vizag (Visakhapatnam), Sep 2026 - Mar 2027 deployment, NCERT 2026. No timetable received: sessions are mapped monthly by syllabus alignment, teachers schedule sections within each month. Models 31 and 32 are not part of this plan.",
+ "entries": [
+  {
+   "model": 1,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr7 Ch3 (revision)"
+  },
+  {
+   "model": 6,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr8 Ch5 (revision)"
+  },
+  {
+   "model": 7,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr6 Ch5 (revision); Gr8 Ch5 (revision)"
+  },
+  {
+   "model": 9,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr7 Ch3 (revision)"
+  },
+  {
+   "model": 11,
+   "from": "2026-09-01",
+   "to": "2026-09-09",
+   "note": "Gr9 Ch6 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
+  },
+  {
+   "model": 17,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr8 Ch4 (revision)"
+  },
+  {
+   "model": 18,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr8 Ch5 (revision)"
+  },
+  {
+   "model": 19,
+   "from": "2026-09-01",
+   "to": "2026-09-09",
+   "note": "Gr9 Ch4 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
+  },
+  {
+   "model": 20,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr6 Ch4 (revision)"
+  },
+  {
+   "model": 21,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr8 Ch4 (revision)"
+  },
+  {
+   "model": 22,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr7 Ch8 (live); Gr9 Ch4 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
+  },
+  {
+   "model": 23,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr7 Ch8 (live)"
+  },
+  {
+   "model": 24,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr8 Ch6 (live)"
+  },
+  {
+   "model": 25,
+   "from": "2026-09-01",
+   "to": "2026-09-09",
+   "note": "Gr9 Ch6 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
+  },
+  {
+   "model": 26,
+   "from": "2026-09-01",
+   "to": "2026-09-09",
+   "note": "Gr9 Ch6 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
+  },
+  {
+   "model": 27,
+   "from": "2026-09-01",
+   "to": "2026-09-30",
+   "note": "Gr7 Ch7 (live)"
+  },
+  {
+   "model": 4,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr10 Ch11 (live)"
+  },
+  {
+   "model": 6,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr9 Ch6 (revision)"
+  },
+  {
+   "model": 7,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr9 Ch6 (revision)"
+  },
+  {
+   "model": 8,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 12,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr9 Ch7 (live)"
+  },
+  {
+   "model": 13,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr9 Ch7 (live)"
+  },
+  {
+   "model": 14,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr9 Ch7 (live)"
+  },
+  {
+   "model": 15,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 16,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr10 Ch12 (live)"
+  },
+  {
+   "model": 17,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr10 Ch12 (live)"
+  },
+  {
+   "model": 20,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr10 Ch12 (live)"
+  },
+  {
+   "model": 21,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr6 Ch7 (live)"
+  },
+  {
+   "model": 27,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr6 Ch8 (live)"
+  },
+  {
+   "model": 29,
+   "from": "2026-10-01",
+   "to": "2026-10-31",
+   "note": "Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 2,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr10 Ch11 (revision)"
+  },
+  {
+   "model": 4,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr10 Ch11 (revision)"
+  },
+  {
+   "model": 7,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr9 Ch7 (live)"
+  },
+  {
+   "model": 8,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr7 Ch11 (live); Gr8 Ch10 (live); Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 10,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr7 Ch11 (live); Gr8 Ch10 (live)"
+  },
+  {
+   "model": 12,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr9 Ch7 (live)"
+  },
+  {
+   "model": 13,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr9 Ch7 (live)"
+  },
+  {
+   "model": 14,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr9 Ch7 (live)"
+  },
+  {
+   "model": 15,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr8 Ch10 (live); Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 16,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr10 Ch12 (revision)"
+  },
+  {
+   "model": 17,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr10 Ch12 (revision)"
+  },
+  {
+   "model": 21,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr6 Ch7 (live)"
+  },
+  {
+   "model": 28,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr9 Ch10 (live)"
+  },
+  {
+   "model": 29,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr7 Ch11 (live); Gr8 Ch10 (live); Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 30,
+   "from": "2026-11-01",
+   "to": "2026-11-30",
+   "note": "Gr9 Ch10 (live)"
+  },
+  {
+   "model": 3,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr8 Ch4 (revision)"
+  },
+  {
+   "model": 8,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr7 Ch11 (live); Gr8 Ch10 (revision)"
+  },
+  {
+   "model": 10,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr7 Ch11 (live)"
+  },
+  {
+   "model": 12,
+   "from": "2026-12-01",
+   "to": "2026-12-09",
+   "note": "Gr9 Ch7 (revision) – first two weeks of December, before PT II (10–20 Dec)"
+  },
+  {
+   "model": 13,
+   "from": "2026-12-01",
+   "to": "2026-12-09",
+   "note": "Gr9 Ch7 (revision) – first two weeks of December, before PT II (10–20 Dec)"
+  },
+  {
+   "model": 14,
+   "from": "2026-12-01",
+   "to": "2026-12-09",
+   "note": "Gr9 Ch7 (revision) – first two weeks of December, before PT II (10–20 Dec)"
+  },
+  {
+   "model": 15,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr8 Ch10 (revision)"
+  },
+  {
+   "model": 17,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr8 Ch4 (revision)"
+  },
+  {
+   "model": 21,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr6 Ch7 & Ch8 (revision)"
+  },
+  {
+   "model": 22,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr7 Ch7 & Ch8 (revision)"
+  },
+  {
+   "model": 23,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr7 Ch7 & Ch8 (revision)"
+  },
+  {
+   "model": 27,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr6 Ch7 & Ch8 (revision); Gr7 Ch7 & Ch8 (revision)"
+  },
+  {
+   "model": 28,
+   "from": "2026-12-01",
+   "to": "2026-12-09",
+   "note": "Gr9 Ch10 (live) – first two weeks of December, before PT II (10–20 Dec)"
+  },
+  {
+   "model": 29,
+   "from": "2026-12-01",
+   "to": "2026-12-31",
+   "note": "Gr7 Ch11 (live); Gr8 Ch10 (revision)"
+  },
+  {
+   "model": 30,
+   "from": "2026-12-01",
+   "to": "2026-12-09",
+   "note": "Gr9 Ch10 (live) – first two weeks of December, before PT II (10–20 Dec)"
+  },
+  {
+   "model": 2,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr10 Ch11 (revision)"
+  },
+  {
+   "model": 3,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr7 Ch3 & Ch4 (revision)"
+  },
+  {
+   "model": 4,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr10 Ch11 (revision)"
+  },
+  {
+   "model": 5,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr6 Ch5 (enrichment); Gr7 Ch8 (revision)"
+  },
+  {
+   "model": 6,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr8 Ch5 & Ch6 (revision)"
+  },
+  {
+   "model": 7,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr8 Ch5 & Ch6 (revision)"
+  },
+  {
+   "model": 8,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 9,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr7 Ch3 & Ch4 (revision)"
+  },
+  {
+   "model": 12,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr9 Ch7 (revision)"
+  },
+  {
+   "model": 14,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr9 Ch7 (revision)"
+  },
+  {
+   "model": 15,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 16,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr10 Ch12 (revision)"
+  },
+  {
+   "model": 19,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr6 Ch5 (enrichment); Gr7 Ch8 (revision)"
+  },
+  {
+   "model": 20,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr10 Ch12 (revision)"
+  },
+  {
+   "model": 24,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr8 Ch5 & Ch6 (revision)"
+  },
+  {
+   "model": 25,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr8 Ch5 & Ch6 (revision)"
+  },
+  {
+   "model": 28,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr9 Ch10 (live)"
+  },
+  {
+   "model": 29,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr10 Ch9 (revision)"
+  },
+  {
+   "model": 30,
+   "from": "2027-01-01",
+   "to": "2027-01-31",
+   "note": "Gr9 Ch10 (live)"
+  },
+  {
+   "model": 8,
+   "from": "2027-02-01",
+   "to": "2027-02-28",
+   "note": "Gr7 full syllabus revision"
+  },
+  {
+   "model": 15,
+   "from": "2027-02-01",
+   "to": "2027-02-28",
+   "note": "Gr8 full syllabus revision"
+  },
+  {
+   "model": 17,
+   "from": "2027-02-01",
+   "to": "2027-02-28",
+   "note": "Gr8 full syllabus revision"
+  },
+  {
+   "model": 20,
+   "from": "2027-02-01",
+   "to": "2027-02-28",
+   "note": "Gr6 full syllabus revision"
+  },
+  {
+   "model": 22,
+   "from": "2027-02-01",
+   "to": "2027-02-28",
+   "note": "Gr7 full syllabus revision"
+  },
+  {
+   "model": 27,
+   "from": "2027-02-01",
+   "to": "2027-02-28",
+   "note": "Gr6 full syllabus revision"
+  },
+  {
+   "model": 29,
+   "from": "2027-02-01",
+   "to": "2027-02-28",
+   "note": "Gr8 full syllabus revision"
+  },
+  {
+   "model": 1,
+   "from": "2027-03-01",
+   "to": "2027-03-31",
+   "note": "Gr7 full syllabus revision"
+  },
+  {
+   "model": 6,
+   "from": "2027-03-01",
+   "to": "2027-03-31",
+   "note": "Gr8 full syllabus revision"
+  },
+  {
+   "model": 7,
+   "from": "2027-03-01",
+   "to": "2027-03-31",
+   "note": "Gr6 full syllabus revision"
+  },
+  {
+   "model": 9,
+   "from": "2027-03-01",
+   "to": "2027-03-31",
+   "note": "Gr7 full syllabus revision"
+  },
+  {
+   "model": 19,
+   "from": "2027-03-01",
+   "to": "2027-03-31",
+   "note": "Gr6 full syllabus revision"
+  },
+  {
+   "model": 23,
+   "from": "2027-03-01",
+   "to": "2027-03-31",
+   "note": "Gr7 full syllabus revision"
+  },
+  {
+   "model": 24,
+   "from": "2027-03-01",
+   "to": "2027-03-31",
+   "note": "Gr8 full syllabus revision"
+  },
+  {
+   "model": 25,
+   "from": "2027-03-01",
+   "to": "2027-03-31",
+   "note": "Gr8 full syllabus revision"
+  }
+ ]
+}

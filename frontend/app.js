@@ -403,7 +403,7 @@
           m.image ? h('div', { class: 'thumb' }, h('img', { src: m.image.url, alt: '' })) : null,
           h('div', {}, h('span', { class: 'chip' }, 'MODEL ' + String(m.number).padStart(2, '0')), h('h1', { style: 'margin-top:6px' }, m.name))),
         m.description ? h('p', { class: 'lead', style: 'max-width:70ch' }, m.description) : null,
-        m.plan ? h('p', { class: 'small', style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, planPill(m.plan.state), h('span', { class: 'muted' }, "Your school's plan: " + planDates(m.plan))) : null,
+        m.plan ? h('p', { class: 'small', style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, planPill(m.plan.state), h('span', { class: 'muted' }, "Your school's plan: " + planDates(m.plan)), m.plan.note ? h('span', {}, '\u00b7 ' + m.plan.note) : null) : null,
         h('div', { class: 'vids' }, videoCard('Working video', m.working, m.image?.url, m.busy, m.id, 'working'), videoCard('Assembly video', m.assembly, m.image?.url, m.busy, m.id, 'assembly')),
         pager);
     }
