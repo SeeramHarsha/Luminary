@@ -15,7 +15,6 @@
     let A;
     try { A = S.admin = await api('/api/admin/state'); } catch (e) { toast(e.message, true); return; }
     if (S.adminTab === 'usage') { try { A.usage = await api('/api/admin/usage?days=' + (S.usageDays || 30)); } catch (e) { toast(e.message, true); return; } }
-    if (S.adminTab === 'settings') { try { A.sms = await api('/api/admin/sms/status'); } catch { A.sms = null; } }
     if (S.adminTab === 'calendar') { try { A.cal = await api('/api/admin/calendar'); } catch (e) { toast(e.message, true); return; } }
     const seg = h('div', { class: 'seg tabs' }, tabs.map(([k, n]) => h('button', { class: k === S.adminTab ? 'on' : '', onclick: () => (location.hash = `#/admin/${k}`) }, n)));
     const body = { models: adminModels, qr: adminQr, usage: adminUsage, calendar: adminCalendar, users: adminUsers, settings: adminSettings }[S.adminTab](A);
@@ -289,119 +288,6 @@
           A.profiles.length > 1 ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Delete "${p.label}"? Its school code and printed QR codes will stop working.`)) return; try { await api(`/api/admin/profiles/${p.id}`, { method: 'DELETE' }); refresh(); } catch (e) { toast(e.message, true); } } }, 'Delete') : null)));
   }
 
-  // ---------- message for the teacher (what to teach today, according to the calendar) ----------
-  const localToday = () => new Date().toLocaleDateString('en-CA'); // the admin's own date, YYYY-MM-DD
-  const waLink = (phone, text) => {
-    const digits = String(phone || '').replace(/\D/g, '');
-    return `https://wa.me/${digits.length >= 8 ? digits : ''}?text=${encodeURIComponent(text)}`;
-  };
-  const copyText = (text) => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject(new Error('no clipboard'))).then(() => toast('Message copied'), () => toast('Copy failed: select the text and copy it', true));
-  async function fetchMessage(school, date, grade) {
-    return api(`/api/admin/calendar/message?school=${school.id}&date=${encodeURIComponent(date)}&grade=${grade || ''}`);
-  }
-  function teacherMessage(school) {
-    modal((box, close) => {
-      const nameIn = h('input', { class: 'input', value: school.teacherName || '', placeholder: 'Teacher name', 'aria-label': 'Teacher name' });
-      const phoneIn = h('input', { class: 'input', value: school.teacherPhone || '', placeholder: 'WhatsApp number with country code, e.g. 919876543210', inputmode: 'tel', 'aria-label': 'Teacher phone number' });
-      const dateIn = h('input', { class: 'input', type: 'date', value: localToday(), 'aria-label': 'Date' });
-      const gradeSel = h('select', { class: 'input', 'aria-label': 'Grade' }, [h('option', { value: '' }, 'All grades')]);
-      const text = h('textarea', { class: 'input', rows: 15, 'aria-label': 'Message', style: 'width:100%;font-family:inherit;line-height:1.45' });
-      const info = h('div', { class: 'muted small', style: 'margin:6px 0' });
-      let gradesFilled = false;
-      // the short SMS that Luminary itself sends through the SMS provider (Settings > SMS to teachers)
-      const smsBtn = h('button', { class: 'btn primary sm', hidden: true, onclick: async () => {
-        try {
-          const pv = await api('/api/admin/calendar/sms', { method: 'POST', body: { school: school.id, date: dateIn.value, preview: true } });
-          if (!pv.text) return toast('No session is scheduled for that day.', true);
-          if (!pv.validPhone) return toast('Save a valid phone number for the teacher first.', true);
-          const again = pv.already;
-          if (again && !confirm('An SMS was already sent to this school for that day. Send it again?')) return;
-          if (!confirm(`Send this SMS to ${pv.to}?\n\n${pv.text}\n\n(${pv.chars} characters, all grades)`)) return;
-          const r = await api('/api/admin/calendar/sms', { method: 'POST', body: { school: school.id, date: dateIn.value, force: again } });
-          toast(`SMS sent to ${r.to}`);
-        } catch (e) { toast(e.message, true); }
-      } }, 'Send SMS now');
-      const smsHint = h('p', { class: 'muted small', hidden: true, style: 'margin-top:8px' }, 'Automatic SMS is not set up yet: see Settings > SMS to teachers.');
-      const load = async () => {
-        try {
-          const r = await fetchMessage(school, dateIn.value, gradeSel.value);
-          text.value = r.text;
-          info.textContent = `${r.sessions} ${r.sessions === 1 ? 'session' : 'sessions'} for ${r.date}` + (r.pending ? ` · ${r.pending} pending` : '');
-          if (!gradesFilled) { gradesFilled = true; r.grades.forEach((g) => gradeSel.append(h('option', { value: g }, 'Grade ' + g))); }
-        } catch (e) { toast(e.message, true); }
-      };
-      const saveTeacher = async () => {
-        try {
-          await api(`/api/admin/profiles/${school.id}`, { method: 'PATCH', body: { teacherName: nameIn.value, teacherPhone: phoneIn.value } });
-          school.teacherName = nameIn.value.trim(); school.teacherPhone = phoneIn.value.replace(/[^\d+]/g, '');
-          await load();
-        } catch (e) { toast(e.message, true); }
-      };
-      nameIn.addEventListener('change', saveTeacher);
-      phoneIn.addEventListener('change', saveTeacher);
-      dateIn.addEventListener('change', load);
-      gradeSel.addEventListener('change', load);
-      box.append(
-        h('h2', {}, 'Message for the teacher'),
-        h('p', { class: 'muted small' }, `${school.label}: today's topics from the academic calendar. Luminary does not send the message; you copy it or open it in WhatsApp / SMS and press send.`),
-        h('div', { class: 'row wrap', style: 'gap:8px' }, h('label', { class: 'field grow', style: 'margin:0;min-width:150px' }, h('span', {}, 'Teacher'), nameIn), h('label', { class: 'field grow', style: 'margin:0;min-width:200px' }, h('span', {}, 'WhatsApp / phone'), phoneIn)),
-        h('div', { class: 'row wrap', style: 'gap:8px;margin-top:8px' }, h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'Date'), dateIn), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'Grade'), gradeSel)),
-        info, text,
-        h('div', { class: 'row wrap', style: 'gap:8px;margin-top:10px' },
-          h('button', { class: 'btn primary sm', onclick: () => copyText(text.value) }, 'Copy message'),
-          h('button', { class: 'btn sm', onclick: () => window.open(waLink(phoneIn.value, text.value), '_blank', 'noopener') }, 'Send on WhatsApp'),
-          h('button', { class: 'btn sm', onclick: () => { location.href = `sms:${phoneIn.value.replace(/[^\d+]/g, '')}?&body=${encodeURIComponent(text.value)}`; } }, 'Open in my SMS app'),
-          smsBtn,
-          h('button', { class: 'btn sm', onclick: close }, 'Close')),
-        smsHint);
-      api('/api/admin/sms/status').then((st) => { smsBtn.hidden = !st.configured; smsHint.hidden = st.configured; }).catch(() => {});
-      load();
-    });
-  }
-  // one message per school, all at once
-  function allMessages(C) {
-    modal((box, close) => {
-      const dateIn = h('input', { class: 'input', type: 'date', value: localToday(), 'aria-label': 'Date', style: 'max-width:180px' });
-      const schools = C.schools.filter((x) => x.entries.length);
-      const smsAllNote = h('span', { class: 'muted small' }, '');
-      const smsAll = h('button', { class: 'btn primary sm', hidden: true, onclick: async () => {
-        try {
-          const pv = await api('/api/admin/calendar/sms-all', { method: 'POST', body: { date: dateIn.value, preview: true } });
-          const will = pv.rows.filter((x) => x.sessions && x.hasPhone && !x.already);
-          if (!will.length) return toast('Nobody to send to: no session that day, no phone saved, or already sent.', true);
-          const skip = pv.rows.filter((x) => !will.includes(x)).map((x) => `${x.school} (${!x.sessions ? 'no session' : !x.hasPhone ? 'no phone' : 'already sent'})`);
-          if (!confirm(`Send today's SMS to ${will.length} teacher${will.length === 1 ? '' : 's'}?\n\n${will.map((x) => '- ' + x.school + (x.teacher ? ' (' + x.teacher + ')' : '')).join('\n')}${skip.length ? '\n\nNot sent: ' + skip.join(', ') : ''}`)) return;
-          const r = await api('/api/admin/calendar/sms-all', { method: 'POST', body: { date: dateIn.value } });
-          const bad = r.results.filter((x) => x.result === 'failed');
-          toast(`SMS: ${r.sent} sent, ${r.failed} failed, ${r.skipped} skipped`, r.failed > 0);
-          if (bad.length) alert('These could not be sent:\n' + bad.map((x) => '- ' + x.school + ': ' + x.note).join('\n'));
-        } catch (e) { toast(e.message, true); }
-      } }, 'Send SMS to all teachers now');
-      api('/api/admin/sms/status').then((st) => { smsAll.hidden = !st.configured; smsAllNote.textContent = st.configured ? 'Sends the short SMS through your SMS provider after you confirm.' : 'SMS sending is not set up yet: see Settings > SMS to teachers.'; }).catch(() => {});
-      const rows = schools.map((x) => {
-        const act = (how) => async () => {
-          try {
-            const r = await fetchMessage(x, dateIn.value, '');
-            if (how === 'copy') await copyText(r.text);
-            else window.open(waLink(x.teacherPhone, r.text), '_blank', 'noopener');
-          } catch (e) { toast(e.message, true); }
-        };
-        return h('div', { class: 'card' },
-          h('div', { class: 'row wrap', style: 'gap:8px;align-items:center' }, h('b', { class: 'grow' }, x.label), h('span', { class: 'muted small' }, x.teacherName ? `Teacher: ${x.teacherName}` + (x.teacherPhone ? ` · ${x.teacherPhone}` : '') : 'No teacher saved yet')),
-          h('div', { class: 'row wrap', style: 'gap:8px;margin-top:8px' },
-            h('button', { class: 'btn primary sm', onclick: act('copy') }, 'Copy message'),
-            h('button', { class: 'btn sm', onclick: act('wa') }, 'Send on WhatsApp'),
-            h('button', { class: 'btn sm', onclick: () => { close(); teacherMessage(x); } }, 'Open and edit')));
-      });
-      box.append(h('h2', {}, "Today's messages"),
-        h('p', { class: 'muted small' }, 'One message for the teacher of each school, from its academic calendar. Luminary does not send them: copy a message or open it in WhatsApp and press send. Save each teacher’s number under "Open and edit" so WhatsApp opens the right chat.'),
-        h('label', { class: 'field', style: 'margin:0 0 10px' }, h('span', {}, 'Date'), dateIn),
-        h('div', { class: 'row wrap', style: 'gap:8px;margin-bottom:10px;align-items:center' }, smsAll, smsAllNote),
-        h('div', { class: 'list' }, rows.length ? rows : h('p', { class: 'muted' }, 'No school has a calendar yet.')),
-        h('button', { class: 'btn sm', style: 'margin-top:10px', onclick: close }, 'Close'));
-    });
-  }
-
   // ---------- academic calendar ----------
   const CAL_CHIP = { missed: ['delayed', '#ff5d6c'], late: ['done late', '#ff8a3d'], due: ['due now', '#f5a524'], upcoming: ['upcoming', '#7a8cff'] };
   function adminCalendar(A) {
@@ -423,13 +309,11 @@
           chips.length ? h('div', { class: 'row wrap', style: 'gap:6px' }, chips) : null,
           h('div', { class: 'row wrap', style: 'margin-top:10px;gap:8px' },
             h('button', { class: 'btn primary sm', onclick: (e) => { e.stopPropagation(); go(x.id, !m.total); } }, m.total ? 'View calendar' : 'Set up calendar'),
-            m.total ? h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); go(x.id, true); } }, 'Edit calendar') : null,
-            m.total ? h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); teacherMessage(x); } }, 'Message teacher') : null));
+            m.total ? h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); go(x.id, true); } }, 'Edit calendar') : null));
       });
       return h('div', {},
         h('p', { class: 'lead' }, 'Each school has an academic calendar like its plan: month by month, which grade and chapter, which models, and in which dates. Luminary checks the usage and shows whether the models were opened in time. Schools that are behind are listed first.'),
         h('div', { class: 'row wrap', style: 'margin-bottom:14px;gap:8px' },
-          h('button', { class: 'btn primary sm', onclick: () => allMessages(C) }, "Today's messages for teachers"),
           h('button', { class: 'btn sm', onclick: () => window.open('/api/admin/calendar.csv', '_blank') }, 'Download status as CSV'),
           h('button', { class: 'btn sm', onclick: () => pickFile('.json,application/json', async (file) => {
             try {
@@ -462,7 +346,6 @@
       h('p', { class: 'muted small' }, summary),
       sel.entries.length ? h('div', { class: 'row wrap', style: 'margin:8px 0 14px;gap:10px;align-items:center' },
         h('button', { class: 'btn primary sm', onclick: () => { S.calEdit = !editing; refresh(); } }, editing ? 'View calendar' : 'Edit calendar'),
-        h('button', { class: 'btn sm', onclick: () => teacherMessage(sel) }, 'Message teacher'),
         h('span', { class: 'muted small' }, editing ? 'Edit mode: change dates, remove rows, or use the planning tools below.' : 'View mode: this is what the school sees. Nothing can be changed here.')) : null,
       sel.entries.length ? table : null,
       h('div', { class: 'card', style: 'margin-top:20px' }, h('h3', { style: 'margin:0 0 6px' }, 'Create a simple plan'),
@@ -536,26 +419,6 @@
         h('button', { class: 'btn primary', onclick: async () => { try { await api('/api/admin/users', { method: 'POST', body: { username: un.value, password: pw.value, profileId: pf.value } }); toast('User added'); refresh(); } catch (e) { err.textContent = e.message; } } }, 'Add user')));
   }
 
-  // ---------- settings: SMS to teachers ----------
-  function smsCard(A) {
-    const st = A.sms;
-    if (!st) return null;
-    const phone = h('input', { class: 'input', type: 'tel', inputmode: 'tel', placeholder: 'Your own number, e.g. 9876543210', 'aria-label': 'Test number', style: 'max-width:260px' });
-    const when = (t) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    const log = (st.log || []).slice(0, 8).map((x) => h('div', { class: 'row wrap small', style: 'gap:8px;padding:4px 0;border-top:1px solid var(--line)' },
-      h('span', { class: 'muted' }, when(x.t)), h('span', { class: 'grow' }, `${x.school}${x.source === 'auto' ? ' (automatic)' : x.source === 'test' ? '' : ''} \u2192 ${x.to || '-'}`),
-      h('span', { style: 'color:' + (x.ok ? '#2fbf71' : '#ff5d6c') }, x.ok ? 'sent' : (x.error || 'failed'))));
-    return h('div', { class: 'card' }, h('h2', {}, 'SMS to teachers'),
-      h('p', { class: 'small', style: 'margin:0 0 8px;color:' + (st.configured ? '#2fbf71' : '#f5a524') }, st.configured ? 'SMS provider connected (sender ' + (st.sender || 'not set') + ').' : 'Not set up yet. Add your SMS provider\u2019s settings (Fast2SMS, MSG91, Twilio ... any provider with an HTTP API) to the backend service; see backend/README.md.'),
-      h('p', { class: 'muted small' }, 'In India every SMS must match a template approved on DLT. Register exactly this template with your provider, then use its template ID:'),
-      h('pre', { style: 'white-space:pre-wrap;margin:6px 0;padding:10px;border-radius:8px;background:rgba(255,255,255,.05);font-size:13px' }, st.template),
-      h('p', { class: 'muted small' }, 'Example of what a teacher receives: ' + st.sample),
-      h('p', { class: 'muted small' }, st.auto.time ? `Automatic morning SMS: every day at ${st.auto.time}${st.auto.tzMinutes === 330 ? ' (India time)' : ''}${st.auto.skipSunday ? ', except Sundays' : ''}.` : 'Automatic morning SMS: off (set SMS_AUTO_TIME on the backend to turn it on).'),
-      st.configured ? h('div', { class: 'row wrap', style: 'gap:8px;margin:10px 0;align-items:center' }, phone,
-        h('button', { class: 'btn sm', onclick: async () => { try { const r = await api('/api/admin/sms/test', { method: 'POST', body: { phone: phone.value } }); toast('Test SMS sent to ' + r.to); refresh(); } catch (e) { toast(e.message, true); } } }, 'Send a test SMS')) : null,
-      log.length ? h('div', { style: 'margin-top:8px' }, h('b', { class: 'small' }, 'Recent messages'), log) : null);
-  }
-
   // ---------- settings ----------
   function adminSettings(A) {
     const cur = h('input', { class: 'input', type: 'password', autocomplete: 'current-password' });
@@ -569,7 +432,6 @@
         h('p', { class: 'muted small' }, A.storage && A.storage.kind === 'gcs'
           ? `Photos and the database are stored in the Google Cloud Storage bucket gs://${A.storage.bucket}. Videos are played from YouTube.`
           : 'Photos and the database are stored on this server\u2019s disk. Set GCS_BUCKET to use a Google Cloud Storage bucket instead.')),
-      smsCard(A),
       h('div', { class: 'card' }, h('h2', {}, 'Brand logo'), h('p', { class: 'muted small' }, 'Upload your Luminary logo image (PNG/WebP with a transparent or black background) to replace the built-in wordmark.'),
         h('div', { class: 'row wrap' }, h('button', { class: 'btn sm', onclick: () => pickFile('image/*', async (f) => { try { await upload('/api/admin/logo', f, () => {}, {}); toast('Logo updated'); await loadCatalog(); refresh(); } catch (e) { toast(e.message, true); } }) }, 'Upload logo'),
           A.logo ? h('button', { class: 'btn sm danger', onclick: async () => { await api('/api/admin/logo', { method: 'DELETE' }); await loadCatalog(); refresh(); } }, 'Use built-in wordmark') : null)));

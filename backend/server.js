@@ -9,7 +9,6 @@ const path = require('path');
 const SEED = require('./seed');
 const video = require('./video');
 const store = require('./storage');
-const sms = require('./sms');
 
 const PORT = process.env.PORT || 3000;
 const { DATA_DIR, UPLOADS } = store; // with STORAGE=gcs UPLOADS is only a scratch folder
@@ -385,7 +384,7 @@ app.get('/brand/logo', (req, res) => {
 const A = express.Router();
 // "editor" = opened through an editor QR link: may manage models and upload media, nothing else
 A.use(needStaff);
-A.use(['/profiles', '/users', '/password', '/logo', '/usage', '/usage.csv', '/calendar', '/calendar.csv', '/sms'], needAdmin);
+A.use(['/profiles', '/users', '/password', '/logo', '/usage', '/usage.csv', '/calendar', '/calendar.csv'], needAdmin);
 
 const adminVideo = (m, s) => {
   const v = m.files[s];
@@ -543,8 +542,6 @@ A.patch('/profiles/:id', (req, res) => {
     if (db.profiles.some((x) => x !== p && x.pin === wantPin)) return res.status(409).json({ error: 'That code is already used by another school.' });
   }
   if (req.body.label !== undefined) p.label = clean(req.body.label, 60) || p.label;
-  if (req.body.teacherName !== undefined) p.teacherName = clean(req.body.teacherName, 60);
-  if (req.body.teacherPhone !== undefined) p.teacherPhone = String(req.body.teacherPhone || '').replace(/[^\d+]/g, '').slice(0, 20);
   if (req.body.mode) p.mode = req.body.mode === 'custom' ? 'custom' : 'all';
   if (req.body.allowed) p.allowed = validIds(req.body.allowed);
   if (req.body.editor !== undefined) p.editor = req.body.editor === true;
@@ -624,7 +621,7 @@ function checkDates(from, to) {
 }
 A.get('/calendar', (req, res) => {
   const today = dayKey();
-  const schools = db.profiles.filter((p) => !p.editor).map((p) => ({ id: p.id, label: p.label, pin: p.pin, teacherName: p.teacherName || '', teacherPhone: p.teacherPhone || '', ...calendarReport(p, today) }));
+  const schools = db.profiles.filter((p) => !p.editor).map((p) => ({ id: p.id, label: p.label, pin: p.pin, ...calendarReport(p, today) }));
   res.json({ today, schools, models: [...db.models].sort((a, b) => a.number - b.number).map((m) => ({ id: m.id, number: m.number, name: m.name })) });
 });
 A.get('/calendar.csv', (req, res) => {
@@ -718,46 +715,6 @@ A.post('/calendar/import', (req, res) => {
   save();
   res.json({ ok: true, id: p.id, school: p.label, pin: p.pin, created, entries: p.calendar.length, skipped: [...skipped] });
 });
-// A ready-to-send message for the teacher of a school: what to teach on a day, according to the calendar.
-// Luminary does not send it: the admin copies it or opens it in WhatsApp / SMS and presses send.
-A.get('/calendar/message', (req, res) => {
-  const p = schoolOf(req.query.school);
-  if (!p) return res.status(404).json({ error: 'Not found' });
-  const date = isDate(req.query.date) ? req.query.date : dayKey();
-  const grade = Number(req.query.grade) || null;
-  const rep = calendarReport(p, date);
-  const pretty = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  const mine = (e) => !grade || e.grade === grade;
-  const num = (i) => String(i.number).padStart(2, '0');
-  const kind = (e) => [e.type, e.line === 'VIS' ? 'visualisation' : e.line].filter(Boolean).join(', ');
-  const head = (e) => (e.grade ? `Grade ${e.grade}${e.chapter ? ' - ' + e.chapter : ''}` : e.note || 'Planned session');
-  const full = (e) => `- ${head(e)}${kind(e) ? ' [' + kind(e) + ']' : ''}\n  ${e.what ? e.what + '\n  ' : ''}Models: ${e.items.map((i) => num(i) + ' ' + i.name + (OPENED.includes(i.status) ? ' (already opened)' : '')).join(', ')}`;
-  const now = rep.entries.filter((e) => mine(e) && e.from <= date && date <= e.to);
-  const late = rep.entries.filter((e) => mine(e) && e.to < date && e.status === 'missed');
-  const upcoming = rep.entries.filter((e) => mine(e) && e.from > date);
-  const nextFrom = upcoming.length ? upcoming[0].from : null;
-  const next = upcoming.filter((e) => e.from === nextFrom).slice(0, 4);
-  const who = p.teacherName ? p.teacherName : 'Teacher';
-  const parts = [`Hello ${who},`, ''];
-  if (now.length) {
-    parts.push(`Today is ${pretty(date)}. According to the Luminary academic calendar of ${p.label}${grade ? ' (Grade ' + grade + ')' : ''}, please teach these topics:`, '', now.map(full).join('\n\n'));
-  } else {
-    parts.push(`Today is ${pretty(date)}. No session of the Luminary academic calendar of ${p.label}${grade ? ' (Grade ' + grade + ')' : ''} is scheduled for today.`);
-    if (next.length) parts.push('', `Next up (from ${pretty(nextFrom)}):`, next.map(full).join('\n\n'));
-  }
-  // the same chapter can have a hardware and a visualisation session: list each pending topic once
-  const lateLines = [...new Set(late.map((e) => `- ${head(e)}: ${e.items.filter((i) => !OPENED.includes(i.status)).map((i) => num(i) + ' ' + i.name).join(', ')} (was due ${pretty(e.from)} to ${pretty(e.to)})`))];
-  if (lateLines.length) {
-    parts.push('', `Still pending (their dates are over and they were not opened in Luminary yet): ${lateLines.length}`, lateLines.slice(0, 6).join('\n'));
-    if (lateLines.length > 6) parts.push(`+ ${lateLines.length - 6} more`);
-  }
-  parts.push('', `Open Luminary: ${origin(req)}`, `School code: ${p.pin}`, '', 'Thank you.');
-  res.json({
-    text: parts.join('\n'), school: p.label, date, grade, sessions: now.length, pending: lateLines.length,
-    grades: [...new Set(rep.entries.map((e) => e.grade).filter(Boolean))].sort((a, b) => a - b),
-    teacherName: p.teacherName || '', teacherPhone: p.teacherPhone || '',
-  });
-});
 // plan: one model after another, N days each, starting on a date (for one school or all of them)
 A.post('/calendar/plan', (req, res) => {
   const { to, start } = req.body || {};
@@ -784,135 +741,6 @@ A.post('/calendar/copy', (req, res) => {
   save();
   res.json({ ok: true, schools: targets.length });
 });
-
-// ---------- SMS to the teachers (any HTTP SMS provider: see sms.js) ----------
-// Nothing is sent unless an admin presses a send button, or SMS_AUTO_TIME is set (automatic morning message, off by default).
-const SMS_TEXT = () => process.env.SMS_TEXT || "Hello {name}, today's Luminary topics for {school}: {topics}. Open {link} School code {code}";
-const smsTopicsMax = () => Math.max(40, Number(process.env.SMS_TOPICS_MAX) || 110);
-const tzMinutes = () => (process.env.SMS_TZ_OFFSET !== undefined && process.env.SMS_TZ_OFFSET !== '' ? Number(process.env.SMS_TZ_OFFSET) : 330) || 0; // default: India (UTC+5:30)
-const localNow = () => new Date(Date.now() + tzMinutes() * 60000).toISOString(); // 'YYYY-MM-DDTHH:MM:...' in the school's time zone
-const publicLink = (req) => (process.env.PUBLIC_URL ? process.env.PUBLIC_URL.replace(/\/+$/, '') : req ? origin(req) : '');
-const prettyDay = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// "Gr6 Ch7; Gr7 Ch11; Gr9 Ch7,10": short enough for an SMS
-function shortTopics(entries) {
-  const byGrade = new Map();
-  const loose = new Set();
-  for (const e of entries) {
-    if (!e.grade) { for (const i of e.items) loose.add(String(i.number).padStart(2, '0')); continue; }
-    const set = byGrade.get(e.grade) || new Set();
-    if (/^Full syllabus/i.test(e.chapter)) set.add('full rev');
-    else for (const m of String(e.chapter).matchAll(/Ch (\d+)/g)) set.add(m[1]);
-    byGrade.set(e.grade, set);
-  }
-  const parts = [...byGrade.entries()].sort((a, b) => a[0] - b[0]).map(([g, set]) => {
-    const items = [...set];
-    const nums = items.filter((x) => /^\d+$/.test(x)).sort((a, b) => a - b);
-    return ('Gr' + g + ' ' + [nums.length ? 'Ch' + nums.join(',') : '', ...items.filter((x) => !/^\d+$/.test(x))].filter(Boolean).join(' ')).trim();
-  });
-  if (loose.size) parts.push('models ' + [...loose].sort().join(','));
-  let k = parts.length;
-  while (k > 1 && parts.slice(0, k).join('; ').length > smsTopicsMax()) k--;
-  return parts.slice(0, k).join('; ') + (k < parts.length ? ` +${parts.length - k} more` : '');
-}
-const fillSms = (vars) => SMS_TEXT().replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
-// the variable values in the order they appear in the template (providers that send "template id + values")
-const smsValues = (vars) => [...SMS_TEXT().matchAll(/\{(\w+)\}/g)].map((x) => (x[1] in vars ? String(vars[x[1]]) : ''));
-function smsFor(p, date, link) {
-  const now = calendarReport(p, date).entries.filter((e) => e.from <= date && date <= e.to);
-  if (!now.length) return { text: null, sessions: 0 };
-  const vars = { name: p.teacherName || 'Teacher', school: p.label, date: prettyDay(date), topics: shortTopics(now), count: now.length, link, code: p.pin };
-  return { text: fillSms(vars), values: smsValues(vars), sessions: now.length };
-}
-function smsLogAdd(row) {
-  db.smsLog = db.smsLog || [];
-  db.smsLog.push(row);
-  if (db.smsLog.length > 300) db.smsLog.splice(0, db.smsLog.length - 300);
-  saveSoon();
-}
-const alreadySent = (schoolId, date) => (db.smsLog || []).some((r) => r.ok && r.schoolId === schoolId && r.date === date && r.source !== 'test');
-async function smsSendSchool(p, date, link, opt = {}) {
-  const m = smsFor(p, date, link);
-  if (!m.text) return { skipped: 'No session is scheduled for that day.' };
-  if (!p.teacherPhone) return { skipped: 'No teacher phone number is saved for this school.' };
-  if (!opt.force && alreadySent(p.id, date)) return { skipped: 'Already sent for this day.', already: true };
-  const r = await sms.send({ phone: p.teacherPhone, message: m.text, values: m.values });
-  smsLogAdd({ t: Date.now(), schoolId: p.id, school: p.label, to: sms.maskPhone(r.to || ''), date, ok: !!r.ok, status: r.status || 0, error: r.error || null, source: opt.source || 'admin', chars: m.text.length });
-  return { ok: !!r.ok, error: r.error, text: m.text, to: sms.maskPhone(r.to || '') };
-}
-const sampleVars = (link) => ({ name: 'Teacher', school: 'Sample School', date: prettyDay(dayKey()), topics: 'Gr6 Ch7; Gr7 Ch11', count: 2, link: link || 'https://example.com', code: '0000' });
-const sampleSms = (link) => fillSms(sampleVars(link));
-const schoolsWithCalendar = () => db.profiles.filter((p) => !p.editor && (p.calendar || []).length);
-A.get('/sms/status', (req, res) => res.json({
-  configured: sms.configured(), sender: process.env.SMS_SENDER || '',
-  template: SMS_TEXT().replace(/\{\w+\}/g, '{#var#}'), sample: sampleSms(publicLink(req)),
-  auto: { time: process.env.SMS_AUTO_TIME || '', tzMinutes: tzMinutes(), skipSunday: String(process.env.SMS_AUTO_SKIP_SUNDAY || 'true') !== 'false' },
-  log: (db.smsLog || []).slice(-15).reverse(),
-}));
-A.post('/sms/test', async (req, res) => {
-  if (!sms.configured()) return res.status(400).json({ error: 'SMS is not set up yet. Add the SMS_API_URL setting on the server first.' });
-  const r = await sms.send({ phone: (req.body || {}).phone, message: sampleSms(publicLink(req)), values: smsValues(sampleVars(publicLink(req))) });
-  smsLogAdd({ t: Date.now(), schoolId: null, school: 'Test message', to: sms.maskPhone(r.to || ''), date: dayKey(), ok: !!r.ok, status: r.status || 0, error: r.error || null, source: 'test', chars: sampleSms(publicLink(req)).length });
-  if (!r.ok) return res.status(502).json({ error: r.error });
-  res.json({ ok: true, to: sms.maskPhone(r.to), sent: sampleSms(publicLink(req)) });
-});
-// one school: preview (nothing is sent) or send
-A.post('/calendar/sms', async (req, res) => {
-  const b = req.body || {};
-  const p = schoolOf(b.school);
-  if (!p) return res.status(404).json({ error: 'Not found' });
-  const date = isDate(b.date) ? b.date : localNow().slice(0, 10);
-  const link = publicLink(req);
-  if (b.preview) {
-    const m = smsFor(p, date, link);
-    return res.json({ text: m.text, sessions: m.sessions, chars: m.text ? m.text.length : 0, to: p.teacherPhone ? sms.maskPhone(sms.normalizePhone(p.teacherPhone) || '') : '', validPhone: !!sms.normalizePhone(p.teacherPhone), already: alreadySent(p.id, date), configured: sms.configured() });
-  }
-  if (!sms.configured()) return res.status(400).json({ error: 'SMS is not set up yet. Add the SMS_API_URL setting on the server first.' });
-  const r = await smsSendSchool(p, date, link, { force: !!b.force });
-  if (r.already) return res.status(409).json({ error: 'An SMS was already sent for this school today.', already: true });
-  if (r.skipped) return res.status(400).json({ error: r.skipped });
-  if (!r.ok) return res.status(502).json({ error: r.error });
-  res.json({ ok: true, to: r.to, text: r.text });
-});
-// all schools that have a session that day
-A.post('/calendar/sms-all', async (req, res) => {
-  const b = req.body || {};
-  const date = isDate(b.date) ? b.date : localNow().slice(0, 10);
-  const link = publicLink(req);
-  const rows = schoolsWithCalendar().map((p) => ({ p, m: smsFor(p, date, link), already: alreadySent(p.id, date) }));
-  const row = (x, extra) => ({ school: x.p.label, teacher: x.p.teacherName || '', sessions: x.m.sessions, hasPhone: !!sms.normalizePhone(x.p.teacherPhone), already: x.already, ...extra });
-  if (b.preview) return res.json({ configured: sms.configured(), date, rows: rows.map((x) => row(x)), willSend: rows.filter((x) => x.m.text && sms.normalizePhone(x.p.teacherPhone) && !x.already).length });
-  if (!sms.configured()) return res.status(400).json({ error: 'SMS is not set up yet. Add the SMS_API_URL setting on the server first.' });
-  const results = [];
-  for (const x of rows) {
-    if (!x.m.text) { results.push(row(x, { result: 'skipped', note: 'no session that day' })); continue; }
-    if (!sms.normalizePhone(x.p.teacherPhone)) { results.push(row(x, { result: 'skipped', note: x.p.teacherPhone ? 'invalid phone number' : 'no phone number saved' })); continue; }
-    if (x.already && !b.force) { results.push(row(x, { result: 'skipped', note: 'already sent today' })); continue; }
-    const r = await smsSendSchool(x.p, date, link, { force: !!b.force });
-    results.push(row(x, r.ok ? { result: 'sent' } : { result: 'failed', note: r.error || r.skipped }));
-    await sleep(300);
-  }
-  const n = (k) => results.filter((r) => r.result === k).length;
-  res.json({ date, sent: n('sent'), failed: n('failed'), skipped: n('skipped'), results });
-});
-// optional automatic morning message (SMS_AUTO_TIME=07:30, in the time zone SMS_TZ_OFFSET minutes from UTC, default 330 = India)
-function smsAutoTick() {
-  const at = process.env.SMS_AUTO_TIME;
-  if (!at || !/^\d{1,2}:\d{2}$/.test(at) || !sms.configured()) return;
-  const now = localNow();
-  const date = now.slice(0, 10);
-  const minutes = Number(now.slice(11, 13)) * 60 + Number(now.slice(14, 16));
-  const [hh, mm] = at.split(':').map(Number);
-  const target = hh * 60 + mm;
-  if (minutes < target || minutes > target + 180 || db.smsAutoDate === date) return; // only in the 3 hours after the set time, once per day
-  db.smsAutoDate = date;
-  save(); // marked first: a restart can never send the same day twice
-  if (new Date(date + 'T00:00:00Z').getUTCDay() === 0 && String(process.env.SMS_AUTO_SKIP_SUNDAY || 'true') !== 'false') return;
-  (async () => {
-    for (const p of schoolsWithCalendar()) { await smsSendSchool(p, date, publicLink(null), { source: 'auto' }); await sleep(400); }
-  })().catch((e) => console.error('[sms] auto send failed:', e.message));
-}
-setInterval(smsAutoTick, 30000).unref();
 
 // Usage report: one row per school for the last N days
 function usageReport(days) {
