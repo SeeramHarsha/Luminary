@@ -272,6 +272,9 @@
     return h('div', { class: 'card qrcard' },
       h('div', {}, h('img', { class: 'qr', src: `/api/admin/profiles/${p.id}/qr.png?size=400&t=${Date.now()}`, alt: 'QR code' }), dl),
       h('div', { class: 'grow' },
+        !p.editor ? h('div', { class: 'row wrap', style: 'margin-bottom:12px;gap:10px;align-items:center' },
+          h('button', { class: 'btn primary sm', onclick: () => { S.calSchool = p.id; S.calEdit = false; location.hash = '#/admin/calendar'; } }, p.calendar && p.calendar.length ? 'View calendar' : 'Set up calendar'),
+          h('span', { class: 'muted small' }, p.calendar && p.calendar.length ? `Academic calendar: ${p.calendar.length} sessions` : 'No academic calendar yet')) : null,
         h('label', { class: 'field' }, h('span', {}, 'School name'), label),
         pinWrap,
         h('div', { class: 'row wrap', style: 'margin-bottom:12px' }, h('span', { class: 'link grow' }, p.link),
@@ -282,7 +285,6 @@
           h('button', { class: 'btn primary sm', onclick: () => save({ label: label.value, mode, allowed: [...sel], editor: editor.checked, pin: editor.checked ? undefined : pinIn.value }) }, 'Save'),
           h('button', { class: 'btn sm', onclick: () => save({ mode: 'all' }, 'All models opened') }, 'Open all'),
           h('button', { class: 'btn sm', onclick: () => save({ mode: 'custom', allowed: [] }, 'All models locked') }, 'Lock all'),
-          !p.editor ? h('button', { class: 'btn sm', onclick: () => { S.calSchool = p.id; S.calEdit = false; location.hash = '#/admin/calendar'; } }, p.calendar && p.calendar.length ? 'View calendar' : 'Set up calendar') : null,
           A.profiles.length > 1 ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Delete "${p.label}"? Its school code and printed QR codes will stop working.`)) return; try { await api(`/api/admin/profiles/${p.id}`, { method: 'DELETE' }); refresh(); } catch (e) { toast(e.message, true); } } }, 'Delete') : null)));
   }
 
