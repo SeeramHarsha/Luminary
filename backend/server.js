@@ -542,6 +542,8 @@ A.patch('/profiles/:id', (req, res) => {
     if (db.profiles.some((x) => x !== p && x.pin === wantPin)) return res.status(409).json({ error: 'That code is already used by another school.' });
   }
   if (req.body.label !== undefined) p.label = clean(req.body.label, 60) || p.label;
+  if (req.body.teacherName !== undefined) p.teacherName = clean(req.body.teacherName, 60);
+  if (req.body.teacherPhone !== undefined) p.teacherPhone = String(req.body.teacherPhone || '').replace(/[^\d+]/g, '').slice(0, 20);
   if (req.body.mode) p.mode = req.body.mode === 'custom' ? 'custom' : 'all';
   if (req.body.allowed) p.allowed = validIds(req.body.allowed);
   if (req.body.editor !== undefined) p.editor = req.body.editor === true;
@@ -621,7 +623,7 @@ function checkDates(from, to) {
 }
 A.get('/calendar', (req, res) => {
   const today = dayKey();
-  const schools = db.profiles.filter((p) => !p.editor).map((p) => ({ id: p.id, label: p.label, pin: p.pin, ...calendarReport(p, today) }));
+  const schools = db.profiles.filter((p) => !p.editor).map((p) => ({ id: p.id, label: p.label, pin: p.pin, teacherName: p.teacherName || '', teacherPhone: p.teacherPhone || '', ...calendarReport(p, today) }));
   res.json({ today, schools, models: [...db.models].sort((a, b) => a.number - b.number).map((m) => ({ id: m.id, number: m.number, name: m.name })) });
 });
 A.get('/calendar.csv', (req, res) => {
@@ -714,6 +716,46 @@ A.post('/calendar/import', (req, res) => {
   };
   save();
   res.json({ ok: true, id: p.id, school: p.label, pin: p.pin, created, entries: p.calendar.length, skipped: [...skipped] });
+});
+// A ready-to-send message for the teacher of a school: what to teach on a day, according to the calendar.
+// Luminary does not send it: the admin copies it or opens it in WhatsApp / SMS and presses send.
+A.get('/calendar/message', (req, res) => {
+  const p = schoolOf(req.query.school);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  const date = isDate(req.query.date) ? req.query.date : dayKey();
+  const grade = Number(req.query.grade) || null;
+  const rep = calendarReport(p, date);
+  const pretty = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const mine = (e) => !grade || e.grade === grade;
+  const num = (i) => String(i.number).padStart(2, '0');
+  const kind = (e) => [e.type, e.line === 'VIS' ? 'visualisation' : e.line].filter(Boolean).join(', ');
+  const head = (e) => (e.grade ? `Grade ${e.grade}${e.chapter ? ' - ' + e.chapter : ''}` : e.note || 'Planned session');
+  const full = (e) => `- ${head(e)}${kind(e) ? ' [' + kind(e) + ']' : ''}\n  ${e.what ? e.what + '\n  ' : ''}Models: ${e.items.map((i) => num(i) + ' ' + i.name + (OPENED.includes(i.status) ? ' (already opened)' : '')).join(', ')}`;
+  const now = rep.entries.filter((e) => mine(e) && e.from <= date && date <= e.to);
+  const late = rep.entries.filter((e) => mine(e) && e.to < date && e.status === 'missed');
+  const upcoming = rep.entries.filter((e) => mine(e) && e.from > date);
+  const nextFrom = upcoming.length ? upcoming[0].from : null;
+  const next = upcoming.filter((e) => e.from === nextFrom).slice(0, 4);
+  const who = p.teacherName ? p.teacherName : 'Teacher';
+  const parts = [`Hello ${who},`, ''];
+  if (now.length) {
+    parts.push(`Today is ${pretty(date)}. According to the Luminary academic calendar of ${p.label}${grade ? ' (Grade ' + grade + ')' : ''}, please teach these topics:`, '', now.map(full).join('\n\n'));
+  } else {
+    parts.push(`Today is ${pretty(date)}. No session of the Luminary academic calendar of ${p.label}${grade ? ' (Grade ' + grade + ')' : ''} is scheduled for today.`);
+    if (next.length) parts.push('', `Next up (from ${pretty(nextFrom)}):`, next.map(full).join('\n\n'));
+  }
+  // the same chapter can have a hardware and a visualisation session: list each pending topic once
+  const lateLines = [...new Set(late.map((e) => `- ${head(e)}: ${e.items.filter((i) => !OPENED.includes(i.status)).map((i) => num(i) + ' ' + i.name).join(', ')} (was due ${pretty(e.from)} to ${pretty(e.to)})`))];
+  if (lateLines.length) {
+    parts.push('', `Still pending (their dates are over and they were not opened in Luminary yet): ${lateLines.length}`, lateLines.slice(0, 6).join('\n'));
+    if (lateLines.length > 6) parts.push(`+ ${lateLines.length - 6} more`);
+  }
+  parts.push('', `Open Luminary: ${origin(req)}`, `School code: ${p.pin}`, '', 'Thank you.');
+  res.json({
+    text: parts.join('\n'), school: p.label, date, grade, sessions: now.length, pending: lateLines.length,
+    grades: [...new Set(rep.entries.map((e) => e.grade).filter(Boolean))].sort((a, b) => a - b),
+    teacherName: p.teacherName || '', teacherPhone: p.teacherPhone || '',
+  });
 });
 // plan: one model after another, N days each, starting on a date (for one school or all of them)
 A.post('/calendar/plan', (req, res) => {

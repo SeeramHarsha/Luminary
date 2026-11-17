@@ -288,6 +288,86 @@
           A.profiles.length > 1 ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Delete "${p.label}"? Its school code and printed QR codes will stop working.`)) return; try { await api(`/api/admin/profiles/${p.id}`, { method: 'DELETE' }); refresh(); } catch (e) { toast(e.message, true); } } }, 'Delete') : null)));
   }
 
+  // ---------- message for the teacher (what to teach today, according to the calendar) ----------
+  const localToday = () => new Date().toLocaleDateString('en-CA'); // the admin's own date, YYYY-MM-DD
+  const waLink = (phone, text) => {
+    const digits = String(phone || '').replace(/\D/g, '');
+    return `https://wa.me/${digits.length >= 8 ? digits : ''}?text=${encodeURIComponent(text)}`;
+  };
+  const copyText = (text) => (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject(new Error('no clipboard'))).then(() => toast('Message copied'), () => toast('Copy failed: select the text and copy it', true));
+  async function fetchMessage(school, date, grade) {
+    return api(`/api/admin/calendar/message?school=${school.id}&date=${encodeURIComponent(date)}&grade=${grade || ''}`);
+  }
+  function teacherMessage(school) {
+    modal((box, close) => {
+      const nameIn = h('input', { class: 'input', value: school.teacherName || '', placeholder: 'Teacher name', 'aria-label': 'Teacher name' });
+      const phoneIn = h('input', { class: 'input', value: school.teacherPhone || '', placeholder: 'WhatsApp number with country code, e.g. 919876543210', inputmode: 'tel', 'aria-label': 'Teacher phone number' });
+      const dateIn = h('input', { class: 'input', type: 'date', value: localToday(), 'aria-label': 'Date' });
+      const gradeSel = h('select', { class: 'input', 'aria-label': 'Grade' }, [h('option', { value: '' }, 'All grades')]);
+      const text = h('textarea', { class: 'input', rows: 15, 'aria-label': 'Message', style: 'width:100%;font-family:inherit;line-height:1.45' });
+      const info = h('div', { class: 'muted small', style: 'margin:6px 0' });
+      let gradesFilled = false;
+      const load = async () => {
+        try {
+          const r = await fetchMessage(school, dateIn.value, gradeSel.value);
+          text.value = r.text;
+          info.textContent = `${r.sessions} ${r.sessions === 1 ? 'session' : 'sessions'} for ${r.date}` + (r.pending ? ` · ${r.pending} pending` : '');
+          if (!gradesFilled) { gradesFilled = true; r.grades.forEach((g) => gradeSel.append(h('option', { value: g }, 'Grade ' + g))); }
+        } catch (e) { toast(e.message, true); }
+      };
+      const saveTeacher = async () => {
+        try {
+          await api(`/api/admin/profiles/${school.id}`, { method: 'PATCH', body: { teacherName: nameIn.value, teacherPhone: phoneIn.value } });
+          school.teacherName = nameIn.value.trim(); school.teacherPhone = phoneIn.value.replace(/[^\d+]/g, '');
+          await load();
+        } catch (e) { toast(e.message, true); }
+      };
+      nameIn.addEventListener('change', saveTeacher);
+      phoneIn.addEventListener('change', saveTeacher);
+      dateIn.addEventListener('change', load);
+      gradeSel.addEventListener('change', load);
+      box.append(
+        h('h2', {}, 'Message for the teacher'),
+        h('p', { class: 'muted small' }, `${school.label}: today's topics from the academic calendar. Luminary does not send the message; you copy it or open it in WhatsApp / SMS and press send.`),
+        h('div', { class: 'row wrap', style: 'gap:8px' }, h('label', { class: 'field grow', style: 'margin:0;min-width:150px' }, h('span', {}, 'Teacher'), nameIn), h('label', { class: 'field grow', style: 'margin:0;min-width:200px' }, h('span', {}, 'WhatsApp / phone'), phoneIn)),
+        h('div', { class: 'row wrap', style: 'gap:8px;margin-top:8px' }, h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'Date'), dateIn), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'Grade'), gradeSel)),
+        info, text,
+        h('div', { class: 'row wrap', style: 'gap:8px;margin-top:10px' },
+          h('button', { class: 'btn primary sm', onclick: () => copyText(text.value) }, 'Copy message'),
+          h('button', { class: 'btn sm', onclick: () => window.open(waLink(phoneIn.value, text.value), '_blank', 'noopener') }, 'Send on WhatsApp'),
+          h('button', { class: 'btn sm', onclick: () => { location.href = `sms:${phoneIn.value.replace(/[^\d+]/g, '')}?&body=${encodeURIComponent(text.value)}`; } }, 'Send as SMS'),
+          h('button', { class: 'btn sm', onclick: close }, 'Close')));
+      load();
+    });
+  }
+  // one message per school, all at once
+  function allMessages(C) {
+    modal((box, close) => {
+      const dateIn = h('input', { class: 'input', type: 'date', value: localToday(), 'aria-label': 'Date', style: 'max-width:180px' });
+      const schools = C.schools.filter((x) => x.entries.length);
+      const rows = schools.map((x) => {
+        const act = (how) => async () => {
+          try {
+            const r = await fetchMessage(x, dateIn.value, '');
+            if (how === 'copy') await copyText(r.text);
+            else window.open(waLink(x.teacherPhone, r.text), '_blank', 'noopener');
+          } catch (e) { toast(e.message, true); }
+        };
+        return h('div', { class: 'card' },
+          h('div', { class: 'row wrap', style: 'gap:8px;align-items:center' }, h('b', { class: 'grow' }, x.label), h('span', { class: 'muted small' }, x.teacherName ? `Teacher: ${x.teacherName}` + (x.teacherPhone ? ` · ${x.teacherPhone}` : '') : 'No teacher saved yet')),
+          h('div', { class: 'row wrap', style: 'gap:8px;margin-top:8px' },
+            h('button', { class: 'btn primary sm', onclick: act('copy') }, 'Copy message'),
+            h('button', { class: 'btn sm', onclick: act('wa') }, 'Send on WhatsApp'),
+            h('button', { class: 'btn sm', onclick: () => { close(); teacherMessage(x); } }, 'Open and edit')));
+      });
+      box.append(h('h2', {}, "Today's messages"),
+        h('p', { class: 'muted small' }, 'One message for the teacher of each school, from its academic calendar. Luminary does not send them: copy a message or open it in WhatsApp and press send. Save each teacher’s number under "Open and edit" so WhatsApp opens the right chat.'),
+        h('label', { class: 'field', style: 'margin:0 0 10px' }, h('span', {}, 'Date'), dateIn),
+        h('div', { class: 'list' }, rows.length ? rows : h('p', { class: 'muted' }, 'No school has a calendar yet.')),
+        h('button', { class: 'btn sm', style: 'margin-top:10px', onclick: close }, 'Close'));
+    });
+  }
+
   // ---------- academic calendar ----------
   const CAL_CHIP = { missed: ['delayed', '#ff5d6c'], late: ['done late', '#ff8a3d'], due: ['due now', '#f5a524'], upcoming: ['upcoming', '#7a8cff'] };
   function adminCalendar(A) {
@@ -309,11 +389,13 @@
           chips.length ? h('div', { class: 'row wrap', style: 'gap:6px' }, chips) : null,
           h('div', { class: 'row wrap', style: 'margin-top:10px;gap:8px' },
             h('button', { class: 'btn primary sm', onclick: (e) => { e.stopPropagation(); go(x.id, !m.total); } }, m.total ? 'View calendar' : 'Set up calendar'),
-            m.total ? h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); go(x.id, true); } }, 'Edit calendar') : null));
+            m.total ? h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); go(x.id, true); } }, 'Edit calendar') : null,
+            m.total ? h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); teacherMessage(x); } }, 'Message teacher') : null));
       });
       return h('div', {},
         h('p', { class: 'lead' }, 'Each school has an academic calendar like its plan: month by month, which grade and chapter, which models, and in which dates. Luminary checks the usage and shows whether the models were opened in time. Schools that are behind are listed first.'),
         h('div', { class: 'row wrap', style: 'margin-bottom:14px;gap:8px' },
+          h('button', { class: 'btn primary sm', onclick: () => allMessages(C) }, "Today's messages for teachers"),
           h('button', { class: 'btn sm', onclick: () => window.open('/api/admin/calendar.csv', '_blank') }, 'Download status as CSV'),
           h('button', { class: 'btn sm', onclick: () => pickFile('.json,application/json', async (file) => {
             try {
@@ -346,6 +428,7 @@
       h('p', { class: 'muted small' }, summary),
       sel.entries.length ? h('div', { class: 'row wrap', style: 'margin:8px 0 14px;gap:10px;align-items:center' },
         h('button', { class: 'btn primary sm', onclick: () => { S.calEdit = !editing; refresh(); } }, editing ? 'View calendar' : 'Edit calendar'),
+        h('button', { class: 'btn sm', onclick: () => teacherMessage(sel) }, 'Message teacher'),
         h('span', { class: 'muted small' }, editing ? 'Edit mode: change dates, remove rows, or use the planning tools below.' : 'View mode: this is what the school sees. Nothing can be changed here.')) : null,
       sel.entries.length ? table : null,
       h('div', { class: 'card', style: 'margin-top:20px' }, h('h3', { style: 'margin:0 0 6px' }, 'Create a simple plan'),
