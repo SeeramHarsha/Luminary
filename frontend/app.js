@@ -307,6 +307,27 @@
     });
   }
 
+  // ---------- the school's academic calendar ----------
+  const PLAN_LABEL = { now: 'Now', next: 'Next', overdue: 'To open', done: '\u2713 Opened' };
+  const fmtPlanDay = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const planDates = (p) => (p.from === p.to ? fmtPlanDay(p.from) : fmtPlanDay(p.from) + ' \u2013 ' + fmtPlanDay(p.to));
+  const planPill = (state) => h('span', { class: 'planpill ' + state }, PLAN_LABEL[state]);
+  // card on the library screen: what to open now, what was missed, what comes next
+  function planCard(c) {
+    const list = c.models.filter((m) => m.plan);
+    if (!list.length) return null;
+    const by = (k) => list.filter((m) => m.plan.state === k).sort((x, y) => (x.plan.from < y.plan.from ? -1 : 1));
+    const opened = by('done').length;
+    const row = (m) => h('a', { class: 'planrow', href: '#/m/' + m.id }, planPill(m.plan.state), h('span', { class: 'nm' }, String(m.number).padStart(2, '0') + ' \u00b7 ' + m.name), h('span', { class: 'muted small' }, planDates(m.plan)));
+    const over = by('overdue');
+    const rows = [...by('now').map(row), ...over.slice(0, 3).map(row), ...by('next').slice(0, 1).map(row)];
+    return h('section', { class: 'card plancard' },
+      h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, "Your school's plan"), h('span', { class: 'muted small' }, `${opened} of ${list.length} models opened`)),
+      h('div', { class: 'bar', style: 'margin:10px 0 6px' }, h('i', { style: `width:${Math.round((opened / list.length) * 100)}%` })),
+      over.length > 3 ? h('div', { class: 'muted small' }, `${over.length} models are still to open.`) : null,
+      ...(rows.length ? rows : [h('div', { class: 'muted small' }, 'Everything planned so far has been opened. Well done!')]));
+  }
+
   function folder(m, i) {
     const hue = Math.round(220 - (i * 300) / 31);
     const a = h('a', { class: 'folder' + (m.locked ? ' locked' : ''), href: `#/m/${m.id}`, style: `--h:${hue};--i:${i}`, 'aria-label': m.name + (m.locked ? ' (locked)' : '') },
@@ -315,7 +336,8 @@
         h('div', { class: 'sheet' }),
         h('div', { class: 'photo' }, m.image ? h('img', { src: m.image.url, alt: '', loading: 'lazy', decoding: 'async' }) : null),
         h('div', { class: 'front' }, h('span', { class: 'num' }, String(m.number).padStart(2, '0')), h('span', { class: 'nm' }, m.name)))),
-      m.locked ? h('span', { class: 'lk', html: svg('lock') }) : null);
+      m.locked ? h('span', { class: 'lk', html: svg('lock') }) : null,
+      !m.locked && m.plan ? h('span', { class: 'planpill ' + m.plan.state, title: planDates(m.plan) }, PLAN_LABEL[m.plan.state]) : null);
     if (m.locked) a.addEventListener('click', (e) => { e.preventDefault(); toast('Locked — scan an authorised QR code to open this model.'); });
     return a;
   }
@@ -336,6 +358,7 @@
       h('h1', {}, 'Model ', h('span', { class: 'grad' }, 'library')),
       h('p', { class: 'lead' }, `${c.models.length} models` + (open < c.models.length ? ` · ${open} unlocked` : '')),
       sync,
+      planCard(c),
       h('div', { class: 'tools' }, h('div', { class: 'search', html: svg('search') }, search)),
       grid), footer()));
     fill();
@@ -380,6 +403,7 @@
           m.image ? h('div', { class: 'thumb' }, h('img', { src: m.image.url, alt: '' })) : null,
           h('div', {}, h('span', { class: 'chip' }, 'MODEL ' + String(m.number).padStart(2, '0')), h('h1', { style: 'margin-top:6px' }, m.name))),
         m.description ? h('p', { class: 'lead', style: 'max-width:70ch' }, m.description) : null,
+        m.plan ? h('p', { class: 'small', style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, planPill(m.plan.state), h('span', { class: 'muted' }, "Your school's plan: " + planDates(m.plan))) : null,
         h('div', { class: 'vids' }, videoCard('Working video', m.working, m.image?.url, m.busy, m.id, 'working'), videoCard('Assembly video', m.assembly, m.image?.url, m.busy, m.id, 'assembly')),
         pager);
     }

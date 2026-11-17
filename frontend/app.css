@@ -261,3 +261,16 @@ body.cin-open { overflow: hidden; }
 /* YouTube embed */
 .ytp { position: absolute; inset: 0; background: #000; }
 .ytp iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+/* school calendar */
+.planpill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; letter-spacing: .04em; white-space: nowrap; border: 1px solid currentColor; background: rgba(4,5,10,.72); backdrop-filter: blur(4px); }
+.planpill.now { color: #5fd0ff; }
+.planpill.next { color: #a99bff; }
+.planpill.overdue { color: #ff8a3d; }
+.planpill.done { color: #6fe59a; }
+.folder .planpill { position: absolute; top: 19px; left: 8px; z-index: 3; }
+.plancard { margin: 0 0 18px; padding: 14px 16px; }
+.planrow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
+.planrow:first-of-type { margin-top: 4px; }
+.planrow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.planrow:hover .nm { text-decoration: underline; }

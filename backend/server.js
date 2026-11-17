@@ -313,9 +313,24 @@ app.post('/api/track', (req, res) => {
 
 app.post('/api/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
 
+// the school's own calendar, per model: 'now' (its dates are running), 'next', 'overdue' (dates over, not opened) or 'done' (opened)
+function planFor(sess) {
+  const pid = trackedProfile(sess);
+  const p = pid && profileOf(pid);
+  if (!p || !(p.calendar || []).length) return null;
+  const rank = { now: 0, overdue: 1, next: 2, done: 3 };
+  const map = new Map();
+  for (const e of calendarReport(p).entries) {
+    const state = e.status === 'due' ? 'now' : e.status === 'upcoming' ? 'next' : e.status === 'missed' ? 'overdue' : 'done'; // opened late still counts as opened
+    const prev = map.get(e.model);
+    if (!prev || rank[state] < rank[prev.state] || (state === prev.state && e.from < prev.from)) map.set(e.model, { from: e.from, to: e.to, state });
+  }
+  return map;
+}
 app.get('/api/catalog', needAuth, (req, res) => {
   const s = req.sess;
   res.set('Cache-Control', 'no-store');
+  const plans = planFor(s);
   const models = [...db.models].sort((a, b) => a.number - b.number).map((m) => {
     const locked = isLocked(s, m);
     return {
@@ -324,6 +339,7 @@ app.get('/api/catalog', needAuth, (req, res) => {
       working: videoInfo(m.files.working, locked, (m.covers || {}).working),
       assembly: videoInfo(m.files.assembly, locked, (m.covers || {}).assembly),
       busy: !locked && ['working', 'assembly'].some((s) => !m.files[s] && m.pending && m.pending[s] && m.pending[s].status === 'processing'),
+      plan: (plans && plans.get(m.id)) || null,
     };
   });
   res.json({ models, logo: db.settings.logo ? '/brand/logo' : null, logoV: db.settings.logo ? db.settings.logo.file : null });
