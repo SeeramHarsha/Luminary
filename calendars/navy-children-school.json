@@ -298,7 +298,7 @@
    "what": "Motion Conversion 1 + ATDG 1 — straight-line motion, scalars",
    "slot": "Before Half Yearly (exam: 10–27 Sep); schedule in first week of September only",
    "from": "2026-09-01",
-   "to": "2026-09-09"
+   "to": "2026-09-30"
   },
   {
    "grade": 9,
@@ -313,7 +313,7 @@
    "what": "Newton Cradle, Force Table, Buoyant Force — Newton's laws, forces",
    "slot": "Before Half Yearly; schedule in first week of September only",
    "from": "2026-09-01",
-   "to": "2026-09-09"
+   "to": "2026-09-30"
   },
   {
    "grade": 6,
@@ -658,7 +658,7 @@
    "what": "Basic of Sound + Propagation of Sound — sound characteristics",
    "slot": "Before PT II (exam: 10–20 Dec); schedule first two weeks",
    "from": "2026-12-01",
-   "to": "2026-12-09"
+   "to": "2026-12-31"
   },
   {
    "grade": 9,
@@ -673,7 +673,7 @@
    "what": "Power Gen, Power Factor, PE & KE — PT II syllabus Ch 7",
    "slot": "Before PT II; schedule first two weeks",
    "from": "2026-12-01",
-   "to": "2026-12-09"
+   "to": "2026-12-31"
   },
   {
    "grade": 6,
