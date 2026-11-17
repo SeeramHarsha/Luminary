@@ -307,6 +307,89 @@
     });
   }
 
+  // ---------- calendar page: same layout as the school's PDF (month by month: grade, chapter, type, line, models, what happens, slot) ----------
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const CAL_ST = { done: ['Done', '#2fbf71'], early: ['Done early', '#2fbf71'], late: ['Done late', '#ff8a3d'], due: ['Due now', '#f5a524'], upcoming: ['Upcoming', '#7a8cff'], missed: ['Delayed', '#ff5d6c'] };
+  const TYPE_COL = { revision: '#6aa5ff', live: '#ffb45e', enrichment: '#b69cff' };
+  const OPENED_ST = ['done', 'early', 'late'];
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const calDay = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const chapterShort = (c) => (/^Full syllabus/i.test(c) ? 'full syllabus rev' : (c.match(/Ch \d+/g) || []).join(' & ') || c);
+  function calPage(rep, opt = {}) {
+    const info = rep.info || {};
+    const adm = opt.admin;
+    const root = h('div', { class: 'calview' });
+    if (info.heading || info.subtitle) root.append(h('div', { class: 'calhead' }, info.heading ? h('h2', {}, info.heading) : null, info.subtitle ? h('div', { class: 'muted small' }, info.subtitle) : null));
+    if (info.intro) root.append(h('div', { class: 'calnote' }, info.intro));
+    const chip = (it) => {
+      const opened = OPENED_ST.includes(it.status);
+      const col = it.status === 'missed' ? '#ff5d6c' : opened ? '#2fbf71' : it.status === 'due' ? '#f5a524' : '#8a8fa3';
+      const label = (opened ? '✓ ' : '○ ') + pad2(it.number) + ' · ' + it.name;
+      const tip = CAL_ST[it.status][0] + (it.delayDays ? ` (${it.delayDays} ${it.delayDays === 1 ? 'day' : 'days'})` : '');
+      return opt.link && it.number ? h('a', { class: 'mchip', href: '#/m/' + it.model, style: 'color:' + col, title: tip }, label) : h('span', { class: 'mchip', style: 'color:' + col, title: tip }, label);
+    };
+    const byMonth = new Map();
+    for (const e of rep.entries) { const k = e.from.slice(0, 7); (byMonth.get(k) || byMonth.set(k, []).get(k)).push(e); }
+    for (const [ym, list] of byMonth) {
+      const head = ['Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Dates', 'Status'].concat(adm ? [''] : []);
+      const rows = list.map((e) => {
+        let dates;
+        if (adm) {
+          const f = h('input', { class: 'input', type: 'date', value: e.from, 'aria-label': 'From' });
+          const t = h('input', { class: 'input', type: 'date', value: e.to, 'aria-label': 'To' });
+          f.addEventListener('change', () => adm.onDates(e.id, f.value, t.value));
+          t.addEventListener('change', () => adm.onDates(e.id, f.value, t.value));
+          dates = h('div', { class: 'caldates' }, f, h('span', { class: 'muted small' }, 'to'), t);
+        } else dates = h('span', {}, calDay(e.from) + (e.from === e.to ? '' : ' – ' + calDay(e.to)));
+        const st = CAL_ST[e.status];
+        const sub = e.status === 'missed' ? `${e.delayDays} ${e.delayDays === 1 ? 'day' : 'days'} delayed` : e.status === 'late' ? `${e.delayDays} ${e.delayDays === 1 ? 'day' : 'days'} late` : e.total > 1 && e.opened && e.opened < e.total ? `${e.opened} of ${e.total} opened` : '';
+        const cells = [
+          h('td', {}, e.grade ? String(e.grade) : ''),
+          h('td', {}, e.chapter || e.note || ''),
+          h('td', {}, e.type ? h('span', { class: 'tp', style: 'color:' + (TYPE_COL[e.type] || '#aab') }, e.type) : ''),
+          h('td', {}, e.line || ''),
+          h('td', {}, h('div', { class: 'mchips' }, e.items.map(chip))),
+          h('td', {}, e.what || ''),
+          h('td', {}, e.slot || ''),
+          h('td', { class: 'nowrap' }, dates),
+          h('td', {}, h('span', { class: 'planpill', style: 'color:' + st[1] }, st[0]), sub ? h('div', { class: 'muted small', style: 'margin-top:4px' }, sub) : null),
+        ];
+        if (adm) cells.push(h('td', {}, h('button', { class: 'btn sm danger', onclick: () => adm.onRemove(e.id) }, 'Remove')));
+        return h('tr', {}, cells);
+      });
+      root.append(h('h3', { class: 'calmonth' }, MONTHS[+ym.slice(5, 7) - 1] + ' ' + ym.slice(0, 4)),
+        h('div', { class: 'calwrap' }, h('table', { class: 'caltab' }, h('thead', {}, h('tr', {}, head.map((t) => h('th', {}, t)))), h('tbody', {}, rows))));
+    }
+    // every model of the plan: where it lands, and whether it was opened
+    const sku = new Map((info.skus || []).map((k) => [k.model, k]));
+    const per = new Map();
+    for (const e of rep.entries) for (const it of e.items) {
+      const o = per.get(it.model) || { it, lands: [], opened: 0 };
+      o.lands.push(MONTHS[+e.from.slice(5, 7) - 1].slice(0, 3) + ' · ' + (e.grade ? 'Gr' + e.grade + ' ' + chapterShort(e.chapter) + (e.type ? ' (' + e.type + ')' : '') : e.note || 'planned'));
+      if (OPENED_ST.includes(it.status)) o.opened++;
+      per.set(it.model, o);
+    }
+    if (per.size && info.skus && info.skus.length) {
+      const rows = [...per.values()].sort((x, y) => x.it.number - y.it.number).map((o) => {
+        const k = sku.get(o.it.model) || {};
+        return h('tr', {}, h('td', {}, k.code || ''), h('td', {}, pad2(o.it.number) + ' · ' + o.it.name), h('td', {}, o.lands.join('; ')), h('td', {}, k.type ? h('span', { class: 'tp', style: 'color:' + (TYPE_COL[k.type] || '#aab') }, k.type) : ''), h('td', { class: 'nowrap' }, `${o.opened} of ${o.lands.length} opened`));
+      });
+      root.append(h('h3', { class: 'calmonth' }, `Every model accounted for (${per.size})`),
+        h('div', { class: 'calwrap' }, h('table', { class: 'caltab' }, h('thead', {}, h('tr', {}, ['SKU', 'Model', 'Lands at', 'Type', 'Opened'].map((t) => h('th', {}, t)))), h('tbody', {}, rows))));
+    }
+    const section = (title, items, cls) => (items && items.length ? [h('h3', { class: 'calmonth' }, title), h('div', { class: 'calnote ' + (cls || '') }, h('ul', {}, items.map((t) => h('li', {}, t))))] : []);
+    root.append(...section('Mappings to push back to the catalogue', info.mappings), ...section('Gaps', info.gaps, 'warn'), ...section('Collect from the school', info.collect));
+    return root;
+  }
+  async function planView() {
+    let rep;
+    try { rep = await api('/api/plan'); } catch (e) { toast(e.message, true); location.hash = '#/'; return; }
+    const back = h('button', { class: 'crumb', onclick: () => (location.hash = '#/') }, h('span', { html: svg('back') }), 'All models');
+    $app.replaceChildren(h('div', { class: 'page' }, header(), h('main', {}, back, h('h1', {}, rep.school + ' ', h('span', { class: 'grad' }, 'calendar')), calPage(rep, { link: true })), footer()));
+    window.scrollTo(0, 0);
+    updateOfflineDot();
+  }
+
   // ---------- the school's academic calendar ----------
   const PLAN_LABEL = { now: 'Now', next: 'Next', overdue: 'Delayed', done: '\u2713 Opened' };
   const fmtPlanDay = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -326,6 +409,7 @@
     return h('section', { class: 'card plancard' },
       h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, "Your school's plan"), h('span', { class: 'muted small' }, `${opened} of ${list.length} models opened`)),
       h('div', { class: 'bar', style: 'margin:10px 0 6px' }, h('i', { style: `width:${Math.round((opened / list.length) * 100)}%` })),
+      h('a', { class: 'small', href: '#/plan', style: 'display:inline-block;margin:0 0 6px' }, 'See the full calendar \u2192'),
       over.length ? h('div', { class: 'small', style: 'color:#ff8a3d;margin-bottom:4px' }, `${over.length} ${over.length === 1 ? 'model is' : 'models are'} delayed: their dates are over and ${over.length === 1 ? 'it has' : 'they have'} not been opened yet.`) : null,
       ...(rows.length ? rows : [h('div', { class: 'muted small' }, 'Everything planned so far has been opened. Well done!')]),
       over.length > 3 || now.length > 5 ? h('div', { class: 'muted small', style: 'margin-top:8px' }, [over.length > 3 ? `${over.length - 3} more delayed` : '', now.length > 5 ? `${now.length - 5} more to open now` : ''].filter(Boolean).join(' · ') + '. The tag on each model tile below shows its status.') : null);
@@ -433,7 +517,7 @@
     // every 30 s while the page is open and someone is using it (or a video is open)
     beat = setInterval(() => { if (document.visibilityState === 'visible' && (Date.now() - lastInput < 120000 || window.LM.activePlayer)) track('ping'); }, 30000);
   }
-  const LM = window.LM = { h, api, modal, toast, svg, icon, mb, S, header, footer, logo, loadCatalog, wipeDataCache, updateOfflineDot, offline, track };
+  const LM = window.LM = { h, api, modal, toast, svg, icon, mb, S, header, footer, logo, loadCatalog, wipeDataCache, updateOfflineDot, offline, track, calPage };
 
   // ---------- routing ----------
   async function route() {
@@ -458,6 +542,8 @@
         await loadScript('/admin.js');
         await LM.adminView(m[1]);
       }
+    } else if (hash === '#/plan') {
+      await planView();
     } else if (hash === '#/login') {
       adminLoginView();
     } else {

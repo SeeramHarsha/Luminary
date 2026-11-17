@@ -321,9 +321,12 @@ function planFor(sess) {
   const rank = { now: 0, overdue: 1, next: 2, done: 3 };
   const map = new Map();
   for (const e of calendarReport(p).entries) {
-    const state = e.status === 'due' ? 'now' : e.status === 'upcoming' ? 'next' : e.status === 'missed' ? 'overdue' : 'done'; // opened late still counts as opened
-    const prev = map.get(e.model);
-    if (!prev || rank[state] < rank[prev.state] || (state === prev.state && e.from < prev.from)) map.set(e.model, { from: e.from, to: e.to, state, note: e.note, days: e.status === 'missed' ? e.delayDays : 0 });
+    const note = e.note || (e.grade ? `Grade ${e.grade}${e.chapter ? ' \u00b7 ' + e.chapter : ''}${e.type ? ' \u00b7 ' + e.type : ''}` : '');
+    for (const it of e.items) {
+      const state = it.status === 'due' ? 'now' : it.status === 'upcoming' ? 'next' : it.status === 'missed' ? 'overdue' : 'done'; // opened late still counts as opened
+      const prev = map.get(it.model);
+      if (!prev || rank[state] < rank[prev.state] || (state === prev.state && e.from < prev.from)) map.set(it.model, { from: e.from, to: e.to, state, note, days: it.status === 'missed' ? it.delayDays : 0 });
+    }
   }
   return map;
 }
@@ -559,40 +562,61 @@ A.delete('/profiles/:id', (req, res) => {
   res.json({ ok: true });
 });
 // ---------- academic calendar per school ----------
-// profile.calendar = [{ id, model, from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }]: the model a school should cover in that period.
-// Compared with the usage counters to tell whether the model was opened in time. Dates are UTC days (like the usage counters).
+// profile.calendar = [{ id, models: [modelId], from, to, grade?, chapter?, type?, line?, what?, slot?, note? }]: one row per teaching
+// session of the school's plan (like the school's PDF): which kits, for which grade/chapter, in which dates.
+// profile.calendarInfo = { heading, subtitle, intro, mappings, gaps, collect, skus } holds the plan's header and notes.
+// Compared with the usage counters to tell whether each kit was opened in time. Dates are UTC days (like the usage counters).
 const isDate = (x) => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) && !isNaN(Date.parse(x + 'T00:00:00Z')) && new Date(x + 'T00:00:00Z').toISOString().slice(0, 10) === x;
 const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+const daysBetween = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
+const OPENED = ['done', 'early', 'late'];
 function calendarReport(p, today = dayKey()) {
   const days = ((db.stats || {})[p.id] || {}).days || {};
   const act = {}; // model -> [[day, views, plays]]
   for (const [d, x] of Object.entries(days)) for (const [mid, [v, pl]] of Object.entries(x.m || {})) if (v || pl) (act[mid] = act[mid] || []).push([d, v, pl]);
-  const entries = (p.calendar || []).map((e) => {
+  // status of one kit inside the dates of one session
+  const itemOf = (id, from, to) => {
     let views = 0; let plays = 0; let firstIn = null; let firstEarly = null; let firstLate = null;
-    for (const [d, v, pl] of act[e.model] || []) {
-      if (d < e.from) { if (!firstEarly || d < firstEarly) firstEarly = d; }
-      else if (d <= e.to) { views += v; plays += pl; if (!firstIn || d < firstIn) firstIn = d; }
+    for (const [d, v, pl] of act[id] || []) {
+      if (d < from) { if (!firstEarly || d < firstEarly) firstEarly = d; }
+      else if (d <= to) { views += v; plays += pl; if (!firstIn || d < firstIn) firstIn = d; }
       else if (d <= today) { if (!firstLate || d < firstLate) firstLate = d; }
     }
     let status;
     if (firstIn) status = 'done'; // opened inside its dates
-    else if (today < e.from) status = firstEarly ? 'early' : 'upcoming';
-    else if (today <= e.to) status = 'due'; // its dates are running and it has not been opened yet
+    else if (today < from) status = firstEarly ? 'early' : 'upcoming';
+    else if (today <= to) status = 'due'; // its dates are running and it has not been opened yet
     else status = firstEarly ? 'early' : firstLate ? 'late' : 'missed'; // 'missed' is shown as Delayed: dates over, never opened
-    const m = findModel(e.model);
-    const gap = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
-    const delayDays = status === 'missed' ? gap(e.to, today) : status === 'late' ? gap(e.to, firstLate) : 0; // days after its dates (still waiting, or when it was first opened)
-    return { id: e.id, model: e.model, number: m ? m.number : 0, name: m ? m.name : 'Removed model', from: e.from, to: e.to, note: e.note || '', status, delayDays, views, plays, first: firstIn || firstEarly || firstLate, earlyOpen: !!firstEarly };
-  }).sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.number - b.number));
+    const m = findModel(id);
+    const delayDays = status === 'missed' ? daysBetween(to, today) : status === 'late' ? daysBetween(to, firstLate) : 0; // days after its dates
+    return { model: id, number: m ? m.number : 0, name: m ? m.name : 'Removed model', status, delayDays, views, plays, first: firstIn || firstEarly || firstLate, earlyOpen: !!firstEarly };
+  };
+  const entries = (p.calendar || []).map((e) => {
+    const ids = e.models || (e.model ? [e.model] : []);
+    const items = ids.map((id) => itemOf(id, e.from, e.to)).sort((x, y) => x.number - y.number);
+    const every = (f) => items.length > 0 && items.every(f);
+    let status; // the session as a whole
+    if (every((i) => i.status === 'done' || i.status === 'early')) status = every((i) => i.status === 'early') ? 'early' : 'done';
+    else if (items.some((i) => i.status === 'missed')) status = 'missed';
+    else if (every((i) => OPENED.includes(i.status))) status = 'late';
+    else status = today < e.from ? 'upcoming' : 'due';
+    const firsts = items.map((i) => i.first).filter(Boolean).sort();
+    return {
+      id: e.id, from: e.from, to: e.to, grade: e.grade || null, chapter: e.chapter || '', type: e.type || '', line: e.line || '', what: e.what || '', slot: e.slot || '', note: e.note || '',
+      status, total: items.length, opened: items.filter((i) => OPENED.includes(i.status)).length,
+      views: items.reduce((t, i) => t + i.views, 0), plays: items.reduce((t, i) => t + i.plays, 0),
+      delayDays: Math.max(0, ...items.map((i) => i.delayDays)), first: firsts[0] || null, items,
+    };
+  }).sort((x, y) => (x.from < y.from ? -1 : x.from > y.from ? 1 : (x.grade || 0) - (y.grade || 0)));
   const n = (k) => entries.filter((e) => e.status === k).length;
-  return { entries, summary: { total: entries.length, opened: n('done') + n('early') + n('late'), late: n('late'), missed: n('missed'), due: n('due'), upcoming: n('upcoming') } };
+  return { entries, info: p.calendarInfo || null, summary: { total: entries.length, opened: n('done') + n('early') + n('late'), late: n('late'), missed: n('missed'), due: n('due'), upcoming: n('upcoming') } };
 }
 const schoolOf = (id) => { const p = profileOf(id); return p && !p.editor ? p : null; };
 const planModels = (p) => [...db.models].sort((a, b) => a.number - b.number).filter((m) => p.mode === 'all' || (p.allowed || []).includes(m.id));
-function checkEntry(b, p) {
-  if (!findModel(b.model) || !(p.mode === 'all' || (p.allowed || []).includes(b.model))) return 'Choose a model this school can open.';
-  if (!isDate(b.from) || !isDate(b.to)) return 'Please choose both dates.';
-  if (b.to < b.from) return 'The end date must not be before the start date.';
+const canOpen = (p, modelId) => !!findModel(modelId) && (p.mode === 'all' || (p.allowed || []).includes(modelId));
+function checkDates(from, to) {
+  if (!isDate(from) || !isDate(to)) return 'Please choose both dates.';
+  if (to < from) return 'The end date must not be before the start date.';
   return null;
 }
 A.get('/calendar', (req, res) => {
@@ -604,19 +628,30 @@ A.get('/calendar.csv', (req, res) => {
   const today = dayKey();
   const label = { done: 'Opened in time', early: 'Opened before its dates', due: 'Due now - not opened', upcoming: 'Upcoming', late: 'Opened late (delayed)', missed: 'Delayed - not opened' };
   const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const lines = [['School', 'School code', 'Model no.', 'Model', 'From', 'To', 'Status', 'First opened (UTC date)', 'Model pages opened in the dates', 'Videos played in the dates', 'Days delayed', 'Note'].map(q).join(',')];
-  for (const p of db.profiles.filter((x) => !x.editor)) for (const e of calendarReport(p, today).entries) lines.push([p.label, p.pin, e.number, e.name, e.from, e.to, label[e.status], e.first || '', e.views, e.plays, e.delayDays || '', e.note].map(q).join(','));
+  const lines = [['School', 'School code', 'From', 'To', 'Grade', 'Chapter', 'Type', 'Line', 'Model no.', 'Model', 'Status', 'First opened (UTC date)', 'Days delayed', 'Slot'].map(q).join(',')];
+  for (const p of db.profiles.filter((x) => !x.editor)) {
+    for (const e of calendarReport(p, today).entries) for (const i of e.items) lines.push([p.label, p.pin, e.from, e.to, e.grade || '', e.chapter, e.type, e.line, i.number, i.name, label[i.status], i.first || '', i.delayDays || '', e.slot].map(q).join(','));
+  }
   res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="luminary-calendar-status.csv"' }).send('\ufeff' + lines.join('\r\n'));
+});
+// the school's own calendar (same layout as its plan), for visitors signed in with the school code or QR
+app.get('/api/plan', needAuth, (req, res) => {
+  const pid = trackedProfile(req.sess);
+  const p = pid && profileOf(pid);
+  if (!p || !(p.calendar || []).length) return res.status(404).json({ error: 'Your school has no calendar yet.' });
+  res.set('Cache-Control', 'no-store');
+  res.json({ school: p.label, today: dayKey(), ...calendarReport(p) });
 });
 A.post('/profiles/:id/calendar', (req, res) => {
   const p = schoolOf(req.params.id);
   if (!p) return res.status(404).json({ error: 'Not found' });
   const b = req.body || {};
-  const err = checkEntry(b, p);
+  if (!canOpen(p, b.model)) return res.status(400).json({ error: 'Choose a model this school can open.' });
+  const err = checkDates(b.from, b.to);
   if (err) return res.status(400).json({ error: err });
   p.calendar = p.calendar || [];
-  if (p.calendar.length >= 300) return res.status(400).json({ error: 'A calendar can have up to 300 entries.' });
-  p.calendar.push({ id: rid(4), model: b.model, from: b.from, to: b.to, note: clean(b.note, 300) });
+  if (p.calendar.length >= 600) return res.status(400).json({ error: 'A calendar can have up to 600 rows.' });
+  p.calendar.push({ id: rid(4), models: [b.model], from: b.from, to: b.to, note: clean(b.note, 300) });
   save();
   res.json({ ok: true });
 });
@@ -624,10 +659,11 @@ A.patch('/profiles/:id/calendar/:eid', (req, res) => {
   const p = schoolOf(req.params.id);
   const e = p && (p.calendar || []).find((x) => x.id === req.params.eid);
   if (!e) return res.status(404).json({ error: 'Not found' });
-  const nb = { model: req.body.model || e.model, from: req.body.from || e.from, to: req.body.to || e.to };
-  const err = checkEntry(nb, p);
+  const from = req.body.from || e.from;
+  const to = req.body.to || e.to;
+  const err = checkDates(from, to);
   if (err) return res.status(400).json({ error: err });
-  Object.assign(e, nb);
+  e.from = from; e.to = to;
   if (req.body.note !== undefined) e.note = clean(req.body.note, 300);
   save();
   res.json({ ok: true });
@@ -639,35 +675,45 @@ A.delete('/profiles/:id/calendar/:eid', (req, res) => {
   save();
   res.json({ ok: true });
 });
-// import: { school, mode?, entries: [{ model: <model number>, from, to, note? }] } -> creates the school if needed and replaces its calendar
+// import a whole plan from a file (creates the school if needed and replaces its calendar):
+// { school, mode?, heading?, subtitle?, intro?, mappings?, gaps?, collect?, skus?: [{ code, model, type }],
+//   sessions: [{ grade, chapter, type, line, models: [model numbers], what, slot, from, to }] }   (older files with "entries" still work)
 A.post('/calendar/import', (req, res) => {
   const b = req.body || {};
   const name = clean(b.school, 60);
   if (!name) return res.status(400).json({ error: 'The file has no school name.' });
-  const list = Array.isArray(b.entries) ? b.entries : [];
-  if (!list.length || list.length > 600) return res.status(400).json({ error: 'The file must contain between 1 and 600 calendar entries.' });
+  const list = Array.isArray(b.sessions) ? b.sessions : Array.isArray(b.entries) ? b.entries : [];
+  if (!list.length || list.length > 600) return res.status(400).json({ error: 'The file must contain between 1 and 600 calendar rows.' });
   const byNumber = new Map(db.models.map((m) => [m.number, m]));
-  const entries = [];
-  const skipped = [];
+  const rows = [];
+  const skipped = new Set();
   for (let i = 0; i < list.length; i++) {
     const e = list[i] || {};
-    if (!isDate(e.from) || !isDate(e.to) || e.to < e.from) return res.status(400).json({ error: `Entry ${i + 1}: please check the dates.` });
-    const m = byNumber.get(Number(e.model));
-    if (!m) { skipped.push(Number(e.model)); continue; }
-    entries.push({ id: rid(4), model: m.id, from: e.from, to: e.to, note: clean(e.note, 300) });
+    const err = checkDates(e.from, e.to);
+    if (err) return res.status(400).json({ error: `Row ${i + 1}: ${err}` });
+    const nums = Array.isArray(e.models) ? e.models : e.model != null ? [e.model] : [];
+    const ids = [];
+    for (const num of nums) { const m = byNumber.get(Number(num)); if (m) ids.push(m.id); else skipped.add(Number(num)); }
+    if (!ids.length) continue;
+    rows.push({ id: rid(4), models: [...new Set(ids)], from: e.from, to: e.to, grade: Number(e.grade) || null, chapter: clean(e.chapter, 200), type: clean(e.type, 20).toLowerCase(), line: clean(e.line, 20), what: clean(e.what, 300), slot: clean(e.slot, 200), note: clean(e.note, 300) });
   }
-  if (!entries.length) return res.status(400).json({ error: 'None of the models in the file exist here.' });
+  if (!rows.length) return res.status(400).json({ error: 'None of the models in the file exist here.' });
   let p = db.profiles.find((x) => !x.editor && x.label.toLowerCase() === name.toLowerCase());
   const created = !p;
   if (!p) {
     p = { id: rid(4), code: rid(5), label: name, mode: b.mode === 'custom' ? 'custom' : 'all', allowed: [], editor: false, created: Date.now() };
-    if (p.mode === 'custom') p.allowed = [...new Set(entries.map((e) => e.model))];
+    if (p.mode === 'custom') p.allowed = [...new Set(rows.flatMap((r) => r.models))];
     p.pin = genPin();
     db.profiles.push(p);
   }
-  p.calendar = entries.filter((e) => p.mode === 'all' || (p.allowed || []).includes(e.model));
+  p.calendar = rows.map((r) => ({ ...r, models: r.models.filter((id) => canOpen(p, id)) })).filter((r) => r.models.length);
+  const txt = (x) => (Array.isArray(x) ? x.map((t) => clean(t, 400)).filter(Boolean).slice(0, 40) : []);
+  p.calendarInfo = {
+    heading: clean(b.heading, 160), subtitle: clean(b.subtitle, 240), intro: clean(b.intro, 500), mappings: txt(b.mappings), gaps: txt(b.gaps), collect: txt(b.collect),
+    skus: (Array.isArray(b.skus) ? b.skus : []).map((k) => ({ code: clean(k.code, 12), model: (byNumber.get(Number(k.model)) || {}).id, type: clean(k.type, 20) })).filter((k) => k.model),
+  };
   save();
-  res.json({ ok: true, id: p.id, school: p.label, pin: p.pin, created, entries: p.calendar.length, skipped: [...new Set(skipped)] });
+  res.json({ ok: true, id: p.id, school: p.label, pin: p.pin, created, entries: p.calendar.length, skipped: [...skipped] });
 });
 // plan: one model after another, N days each, starting on a date (for one school or all of them)
 A.post('/calendar/plan', (req, res) => {
@@ -677,7 +723,7 @@ A.post('/calendar/plan', (req, res) => {
   if (!(days >= 1 && days <= 120)) return res.status(400).json({ error: 'Days per model must be between 1 and 120.' });
   const targets = to === 'all' ? db.profiles.filter((p) => !p.editor) : [schoolOf(to)].filter(Boolean);
   if (!targets.length) return res.status(404).json({ error: 'Not found' });
-  for (const p of targets) p.calendar = planModels(p).map((m, i) => ({ id: rid(4), model: m.id, from: addDays(start, i * days), to: addDays(start, (i + 1) * days - 1) }));
+  for (const p of targets) { p.calendar = planModels(p).map((m, i) => ({ id: rid(4), models: [m.id], from: addDays(start, i * days), to: addDays(start, (i + 1) * days - 1) })); p.calendarInfo = null; }
   save();
   res.json({ ok: true, schools: targets.length });
 });
@@ -688,7 +734,10 @@ A.post('/calendar/copy', (req, res) => {
   const to = req.body.to;
   const targets = to === 'all' ? db.profiles.filter((p) => !p.editor && p !== src) : [schoolOf(to)].filter((p) => p && p !== src);
   if (!targets.length) return res.status(400).json({ error: 'Choose another school to copy to.' });
-  for (const p of targets) p.calendar = (src.calendar || []).filter((e) => p.mode === 'all' || (p.allowed || []).includes(e.model)).map((e) => ({ ...e, id: rid(4) }));
+  for (const p of targets) {
+    p.calendar = (src.calendar || []).map((e) => ({ ...e, id: rid(4), models: (e.models || (e.model ? [e.model] : [])).filter((id) => canOpen(p, id)) })).filter((e) => e.models.length);
+    p.calendarInfo = src.calendarInfo ? JSON.parse(JSON.stringify(src.calendarInfo)) : null;
+  }
   save();
   res.json({ ok: true, schools: targets.length });
 });

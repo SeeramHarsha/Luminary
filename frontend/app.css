@@ -274,3 +274,22 @@ body.cin-open { overflow: hidden; }
 .planrow:first-of-type { margin-top: 4px; }
 .planrow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .planrow:hover .nm { text-decoration: underline; }
+
+/* calendar page (same layout as the school's PDF) */
+.calview .calhead h2 { margin: 0 0 4px; }
+.calnote { margin: 14px 0; padding: 10px 14px; border-left: 4px solid #1f9e8a; border-radius: 6px; background: rgba(255,255,255,.04); font-size: 14px; }
+.calnote.warn { border-left-color: #f5a524; background: rgba(245,165,36,.08); }
+.calnote ul { margin: 0; padding-left: 18px; }
+.calnote li { margin: 4px 0; }
+.calmonth { margin: 28px 0 8px; padding-bottom: 6px; font-size: 18px; border-bottom: 2px solid var(--line); }
+.calwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.caltab { width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 13px; text-align: left; }
+.caltab th { padding: 9px 10px; font-weight: 600; color: #8fb0ff; background: rgba(255,255,255,.05); white-space: nowrap; }
+.caltab td { padding: 10px; vertical-align: top; border-top: 1px solid var(--line); }
+.caltab td.nowrap { white-space: nowrap; }
+.caltab .tp { display: inline-block; padding: 1px 8px; border-radius: 6px; border: 1px solid currentColor; font-size: 12px; font-weight: 600; }
+.caltab .mchips { display: flex; flex-direction: column; gap: 3px; }
+.caltab .mchip { text-decoration: none; font-size: 12.5px; }
+.caltab a.mchip:hover { text-decoration: underline; }
+.caltab .caldates { display: flex; align-items: center; gap: 6px; }
+.caltab .caldates .input { width: 140px; padding: 6px 8px; }

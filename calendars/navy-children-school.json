@@ -1,571 +1,896 @@
 {
  "school": "Navy Children School",
  "mode": "all",
- "info": "NCS Vizag (Visakhapatnam), Sep 2026 - Mar 2027 deployment, NCERT 2026. No timetable received: sessions are mapped monthly by syllabus alignment, teachers schedule sections within each month. Models 31 and 32 are not part of this plan.",
- "entries": [
+ "heading": "NCS Vizag — Sep 2026–Mar 2027 deployment",
+ "subtitle": "NAVY CHILDREN SCHOOL, Visakhapatnam · September end-march 2027 · NCERT 2026 (new) · generated 9/12/2026",
+ "intro": "No timetable received; sessions mapped monthly by syllabus alignment. Teachers manage section-level scheduling within each month.",
+ "skus": [
   {
+   "code": "PHCC1",
    "model": 1,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr7 Ch3 (revision)"
+   "type": "revision"
   },
   {
-   "model": 6,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr8 Ch5 (revision)"
-  },
-  {
-   "model": 7,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr6 Ch5 (revision); Gr8 Ch5 (revision)"
-  },
-  {
-   "model": 9,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr7 Ch3 (revision)"
-  },
-  {
-   "model": 11,
-   "from": "2026-09-01",
-   "to": "2026-09-09",
-   "note": "Gr9 Ch6 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
-  },
-  {
-   "model": 17,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr8 Ch4 (revision)"
-  },
-  {
-   "model": 18,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr8 Ch5 (revision)"
-  },
-  {
-   "model": 19,
-   "from": "2026-09-01",
-   "to": "2026-09-09",
-   "note": "Gr9 Ch4 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
-  },
-  {
-   "model": 20,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr6 Ch4 (revision)"
-  },
-  {
-   "model": 21,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr8 Ch4 (revision)"
-  },
-  {
-   "model": 22,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr7 Ch8 (live); Gr9 Ch4 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
-  },
-  {
-   "model": 23,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr7 Ch8 (live)"
-  },
-  {
-   "model": 24,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr8 Ch6 (live)"
-  },
-  {
-   "model": 25,
-   "from": "2026-09-01",
-   "to": "2026-09-09",
-   "note": "Gr9 Ch6 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
-  },
-  {
-   "model": 26,
-   "from": "2026-09-01",
-   "to": "2026-09-09",
-   "note": "Gr9 Ch6 (revision) – first week of September only, before the Half Yearly exam (10–27 Sep)"
-  },
-  {
-   "model": 27,
-   "from": "2026-09-01",
-   "to": "2026-09-30",
-   "note": "Gr7 Ch7 (live)"
-  },
-  {
-   "model": 4,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr10 Ch11 (live)"
-  },
-  {
-   "model": 6,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr9 Ch6 (revision)"
-  },
-  {
-   "model": 7,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr9 Ch6 (revision)"
-  },
-  {
-   "model": 8,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr10 Ch9 (revision)"
-  },
-  {
-   "model": 12,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr9 Ch7 (live)"
-  },
-  {
-   "model": 13,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr9 Ch7 (live)"
-  },
-  {
-   "model": 14,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr9 Ch7 (live)"
-  },
-  {
-   "model": 15,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr10 Ch9 (revision)"
-  },
-  {
-   "model": 16,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr10 Ch12 (live)"
-  },
-  {
-   "model": 17,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr10 Ch12 (live)"
-  },
-  {
-   "model": 20,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr10 Ch12 (live)"
-  },
-  {
-   "model": 21,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr6 Ch7 (live)"
-  },
-  {
-   "model": 27,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr6 Ch8 (live)"
-  },
-  {
-   "model": 29,
-   "from": "2026-10-01",
-   "to": "2026-10-31",
-   "note": "Gr10 Ch9 (revision)"
-  },
-  {
+   "code": "PHCC2",
    "model": 2,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr10 Ch11 (revision)"
+   "type": "revision"
   },
   {
-   "model": 4,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr10 Ch11 (revision)"
-  },
-  {
-   "model": 7,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr9 Ch7 (live)"
-  },
-  {
-   "model": 8,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr7 Ch11 (live); Gr8 Ch10 (live); Gr10 Ch9 (revision)"
-  },
-  {
-   "model": 10,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr7 Ch11 (live); Gr8 Ch10 (live)"
-  },
-  {
-   "model": 12,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr9 Ch7 (live)"
-  },
-  {
-   "model": 13,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr9 Ch7 (live)"
-  },
-  {
-   "model": 14,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr9 Ch7 (live)"
-  },
-  {
-   "model": 15,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr8 Ch10 (live); Gr10 Ch9 (revision)"
-  },
-  {
-   "model": 16,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr10 Ch12 (revision)"
-  },
-  {
-   "model": 17,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr10 Ch12 (revision)"
-  },
-  {
-   "model": 21,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr6 Ch7 (live)"
-  },
-  {
-   "model": 28,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr9 Ch10 (live)"
-  },
-  {
-   "model": 29,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr7 Ch11 (live); Gr8 Ch10 (live); Gr10 Ch9 (revision)"
-  },
-  {
-   "model": 30,
-   "from": "2026-11-01",
-   "to": "2026-11-30",
-   "note": "Gr9 Ch10 (live)"
-  },
-  {
+   "code": "PHCC3",
    "model": 3,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr8 Ch4 (revision)"
+   "type": "revision"
   },
   {
-   "model": 8,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr7 Ch11 (live); Gr8 Ch10 (revision)"
-  },
-  {
-   "model": 10,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr7 Ch11 (live)"
-  },
-  {
-   "model": 12,
-   "from": "2026-12-01",
-   "to": "2026-12-09",
-   "note": "Gr9 Ch7 (revision) – first two weeks of December, before PT II (10–20 Dec)"
-  },
-  {
-   "model": 13,
-   "from": "2026-12-01",
-   "to": "2026-12-09",
-   "note": "Gr9 Ch7 (revision) – first two weeks of December, before PT II (10–20 Dec)"
-  },
-  {
-   "model": 14,
-   "from": "2026-12-01",
-   "to": "2026-12-09",
-   "note": "Gr9 Ch7 (revision) – first two weeks of December, before PT II (10–20 Dec)"
-  },
-  {
-   "model": 15,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr8 Ch10 (revision)"
-  },
-  {
-   "model": 17,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr8 Ch4 (revision)"
-  },
-  {
-   "model": 21,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr6 Ch7 & Ch8 (revision)"
-  },
-  {
-   "model": 22,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr7 Ch7 & Ch8 (revision)"
-  },
-  {
-   "model": 23,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr7 Ch7 & Ch8 (revision)"
-  },
-  {
-   "model": 27,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr6 Ch7 & Ch8 (revision); Gr7 Ch7 & Ch8 (revision)"
-  },
-  {
-   "model": 28,
-   "from": "2026-12-01",
-   "to": "2026-12-09",
-   "note": "Gr9 Ch10 (live) – first two weeks of December, before PT II (10–20 Dec)"
-  },
-  {
-   "model": 29,
-   "from": "2026-12-01",
-   "to": "2026-12-31",
-   "note": "Gr7 Ch11 (live); Gr8 Ch10 (revision)"
-  },
-  {
-   "model": 30,
-   "from": "2026-12-01",
-   "to": "2026-12-09",
-   "note": "Gr9 Ch10 (live) – first two weeks of December, before PT II (10–20 Dec)"
-  },
-  {
-   "model": 2,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr10 Ch11 (revision)"
-  },
-  {
-   "model": 3,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr7 Ch3 & Ch4 (revision)"
-  },
-  {
+   "code": "PHCC4",
    "model": 4,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr10 Ch11 (revision)"
+   "type": "live"
   },
   {
+   "code": "PHMC2",
    "model": 5,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr6 Ch5 (enrichment); Gr7 Ch8 (revision)"
+   "type": "enrichment"
   },
   {
+   "code": "PHGR0",
    "model": 6,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr8 Ch5 & Ch6 (revision)"
+   "type": "revision"
   },
   {
+   "code": "PHUB0",
    "model": 7,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr8 Ch5 & Ch6 (revision)"
+   "type": "revision"
   },
   {
+   "code": "PHLR0",
    "model": 8,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr10 Ch9 (revision)"
+   "type": "live"
   },
   {
+   "code": "PHTS0",
    "model": 9,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr7 Ch3 & Ch4 (revision)"
+   "type": "revision"
   },
   {
+   "code": "PHII0",
+   "model": 10,
+   "type": "live"
+  },
+  {
+   "code": "PHNC0",
+   "model": 11,
+   "type": "revision"
+  },
+  {
+   "code": "PHPG0",
    "model": 12,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr9 Ch7 (revision)"
+   "type": "live"
   },
   {
+   "code": "PHPF0",
+   "model": 13,
+   "type": "live"
+  },
+  {
+   "code": "PHPK0",
    "model": 14,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr9 Ch7 (revision)"
+   "type": "live"
   },
   {
+   "code": "PHCX0",
    "model": 15,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr10 Ch9 (revision)"
+   "type": "revision"
   },
   {
+   "code": "PHEI0",
    "model": 16,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr10 Ch12 (revision)"
+   "type": "live"
   },
   {
-   "model": 19,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr6 Ch5 (enrichment); Gr7 Ch8 (revision)"
-  },
-  {
-   "model": 20,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr10 Ch12 (revision)"
-  },
-  {
-   "model": 24,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr8 Ch5 & Ch6 (revision)"
-  },
-  {
-   "model": 25,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr8 Ch5 & Ch6 (revision)"
-  },
-  {
-   "model": 28,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr9 Ch10 (live)"
-  },
-  {
-   "model": 29,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr10 Ch9 (revision)"
-  },
-  {
-   "model": 30,
-   "from": "2027-01-01",
-   "to": "2027-01-31",
-   "note": "Gr9 Ch10 (live)"
-  },
-  {
-   "model": 8,
-   "from": "2027-02-01",
-   "to": "2027-02-28",
-   "note": "Gr7 full syllabus revision"
-  },
-  {
-   "model": 15,
-   "from": "2027-02-01",
-   "to": "2027-02-28",
-   "note": "Gr8 full syllabus revision"
-  },
-  {
+   "code": "PHEB0",
    "model": 17,
-   "from": "2027-02-01",
-   "to": "2027-02-28",
-   "note": "Gr8 full syllabus revision"
+   "type": "revision"
   },
   {
-   "model": 20,
-   "from": "2027-02-01",
-   "to": "2027-02-28",
-   "note": "Gr6 full syllabus revision"
+   "code": "PHPT0",
+   "model": 18,
+   "type": "revision"
   },
   {
-   "model": 22,
-   "from": "2027-02-01",
-   "to": "2027-02-28",
-   "note": "Gr7 full syllabus revision"
-  },
-  {
-   "model": 27,
-   "from": "2027-02-01",
-   "to": "2027-02-28",
-   "note": "Gr6 full syllabus revision"
-  },
-  {
-   "model": 29,
-   "from": "2027-02-01",
-   "to": "2027-02-28",
-   "note": "Gr8 full syllabus revision"
-  },
-  {
-   "model": 1,
-   "from": "2027-03-01",
-   "to": "2027-03-31",
-   "note": "Gr7 full syllabus revision"
-  },
-  {
-   "model": 6,
-   "from": "2027-03-01",
-   "to": "2027-03-31",
-   "note": "Gr8 full syllabus revision"
-  },
-  {
-   "model": 7,
-   "from": "2027-03-01",
-   "to": "2027-03-31",
-   "note": "Gr6 full syllabus revision"
-  },
-  {
-   "model": 9,
-   "from": "2027-03-01",
-   "to": "2027-03-31",
-   "note": "Gr7 full syllabus revision"
-  },
-  {
+   "code": "PHMC1",
    "model": 19,
-   "from": "2027-03-01",
-   "to": "2027-03-31",
-   "note": "Gr6 full syllabus revision"
+   "type": "revision"
   },
   {
+   "code": "PHMF0",
+   "model": 20,
+   "type": "revision"
+  },
+  {
+   "code": "PHJT0",
+   "model": 21,
+   "type": "live"
+  },
+  {
+   "code": "PHAT1",
+   "model": 22,
+   "type": "live"
+  },
+  {
+   "code": "PHAT2",
    "model": 23,
-   "from": "2027-03-01",
-   "to": "2027-03-31",
-   "note": "Gr7 full syllabus revision"
+   "type": "live"
   },
   {
+   "code": "PHAL0",
    "model": 24,
-   "from": "2027-03-01",
-   "to": "2027-03-31",
-   "note": "Gr8 full syllabus revision"
+   "type": "live"
   },
   {
+   "code": "PHAP0",
    "model": 25,
+   "type": "revision"
+  },
+  {
+   "code": "PHFT0",
+   "model": 26,
+   "type": "revision"
+  },
+  {
+   "code": "PHHT0",
+   "model": 27,
+   "type": "live"
+  },
+  {
+   "code": "PHBS0",
+   "model": 28,
+   "type": "live"
+  },
+  {
+   "code": "PHCM0",
+   "model": 29,
+   "type": "live"
+  },
+  {
+   "code": "PHPS0",
+   "model": 30,
+   "type": "live"
+  }
+ ],
+ "mappings": [
+  "PHMC1 → Grade G6, Ch 5 Measurement of Length and Motion — Jan enrichment session explicitly targets Gr6 Ch5 motion content",
+  "PHMC2 → Grade G6, Ch 5 Measurement of Length and Motion — Jan enrichment session placed here; circular/oscillatory motion fits Ch5",
+  "PHUB0 → Grade G9, Ch 6 How Forces Affect Motion — Oct Gr9 Ch6 revision session explicitly lists PHUB0; lever/mechanical advantage relevant",
+  "PHAP0 → Grade G8, Ch 5 Exploring Forces — Jan Gr8 Ch5&6 revision session includes PHAP0; floating/sinking ties to forces",
+  "PHPT0 → Grade G8, Ch 5 Exploring Forces — Sep Gr8 Ch5 revision lists PHPT0; friction is core Ch5 force topic"
+ ],
+ "gaps": [
+  "PHMC2 has no Gr7/Gr9 mapping in pool — only placed via Jan Gr6 enrichment and Gr7 Ch8 revision sessions",
+  "PHPT0 lands only once (Sep Gr8 Ch5); no further revision or live session scheduled",
+  "PHNC0 lands only once (Sep Gr9 Ch6); absent from all later Gr9 revision and full-syllabus passes",
+  "PHFT0 lands only once (Sep Gr9 Ch6); not reused in Oct/Nov/Dec Gr9 revision cycles",
+  "PHCC3 absent from Feb/Mar Gr8 full-syllabus revision sessions despite Gr8 Ch4 mapping"
+ ],
+ "collect": [
+  "Confirm PHMC2 intended for Jan Gr6 enrichment or was a Gr6 Ch5 label meant for PHMC1 only?",
+  "Should PHNC0 and PHFT0 be added to Nov/Dec Gr9 Ch6 revision or Gr9 full-syllabus pass?",
+  "Is PHPT0 a one-off demo or should it recur in Mar Gr8 full-syllabus revision?",
+  "Oct Gr9 Ch7 session listed twice identically — duplicate or two separate class sections?"
+ ],
+ "sessions": [
+  {
+   "grade": 6,
+   "chapter": "Ch 5: Measurement of Length and Motion",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    7
+   ],
+   "what": "Ubalance — length, lever, measurement",
+   "slot": "Any free period before Mid Term",
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  {
+   "grade": 6,
+   "chapter": "Ch 4: Exploring Magnets",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    20
+   ],
+   "what": "Magnetic Field Explorer — poles, field lines",
+   "slot": "Any free period before Mid Term",
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 7: Heat Transfer in Nature",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    27
+   ],
+   "what": "Heat Transfer — conduction, convection, radiation",
+   "slot": "Any free period before Mid Term",
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 8: Measurement of Time and Motion",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    22,
+    23
+   ],
+   "what": "ATDG 1 & 2 — distance-time graph, pendulum clock",
+   "slot": "Any free period before Mid Term",
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 3: Electricity: Circuits and Their Components",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    1,
+    9
+   ],
+   "what": "Circuit Construction 1 + Types of Switches — lamp, switch",
+   "slot": "Any free period before Mid Term",
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  {
+   "grade": 8,
+   "chapter": "Ch 4: Electricity: Magnetic and Heating Effects",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    17,
+    21
+   ],
+   "what": "Electromagnetic Bell + Peltier — magnetic & heating effects",
+   "slot": "Any free period before Mid Term",
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  {
+   "grade": 8,
+   "chapter": "Ch 5: Exploring Forces",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    6,
+    7,
+    18
+   ],
+   "what": "Gear Ratio, Ubalance, Power Torque — forces, friction, lever",
+   "slot": "Any free period before Mid Term",
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  {
+   "grade": 8,
+   "chapter": "Ch 6: Pressure, Winds, Storms and Cyclones",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    24
+   ],
+   "what": "Air Lock — air pressure, Magdeburg",
+   "slot": "Any free period before Mid Term",
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 4: Describing Motion Around Us",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    19,
+    22
+   ],
+   "what": "Motion Conversion 1 + ATDG 1 — straight-line motion, scalars",
+   "slot": "Before Half Yearly (exam: 10–27 Sep); schedule in first week of September only",
+   "from": "2026-09-01",
+   "to": "2026-09-09"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 6: How Forces Affect Motion",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    11,
+    26,
+    25
+   ],
+   "what": "Newton Cradle, Force Table, Buoyant Force — Newton's laws, forces",
+   "slot": "Before Half Yearly; schedule in first week of September only",
+   "from": "2026-09-01",
+   "to": "2026-09-09"
+  },
+  {
+   "grade": 6,
+   "chapter": "Ch 7: Temperature and Its Measurement",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    21
+   ],
+   "what": "Peltier — temperature measurement, heat",
+   "slot": "Any free period, Term II begins",
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  {
+   "grade": 6,
+   "chapter": "Ch 8: A Journey Through States of Water",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    27
+   ],
+   "what": "Heat Transfer — states of water, conduction/convection",
+   "slot": "Any free period, Term II",
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 7: Work, Energy, and Simple Machines",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    12,
+    13,
+    14
+   ],
+   "what": "Power Gen, Power Factor, PE & KE — work, energy, pulley",
+   "slot": "Any free period; new chapter block begins October",
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 7: Work, Energy, and Simple Machines",
+   "type": "live",
+   "line": "VIS",
+   "models": [
+    12,
+    13,
+    14
+   ],
+   "what": "Visualisation — work, energy, mechanical advantage",
+   "slot": "Any free period; pair with hardware session",
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 6: How Forces Affect Motion",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    7,
+    6
+   ],
+   "what": "Ubalance + Gear Ratio — mechanical advantage, lever",
+   "slot": "Any free period",
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 11: Electricity (continued — series combination done; parallel begins)",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    4
+   ],
+   "what": "Circuit Construction 4 — resistors in series and parallel",
+   "slot": "Any free period; Ch 11 continues this month",
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 12: Magnetic Effect of Electric Current",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    16,
+    17,
+    20
+   ],
+   "what": "EMI, Electromagnetic Bell, Magnetic Field Explorer — solenoid, electromagnet",
+   "slot": "Any free period; Ch 12 taught this month",
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 9: Light Reflection and Refraction",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    8,
+    29,
+    15
+   ],
+   "what": "Law of Reflection, Concave/Convex Mirror & Lens — spherical mirrors, refraction",
+   "slot": "Any free period; Ch 9 taught Apr–Jul, now revision",
+   "from": "2026-10-01",
+   "to": "2026-10-31"
+  },
+  {
+   "grade": 6,
+   "chapter": "Ch 7: Temperature and Its Measurement",
+   "type": "live",
+   "line": "VIS",
+   "models": [
+    21
+   ],
+   "what": "Visualisation — temperature, Peltier effect",
+   "slot": "Any free period",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 11: Light: Shadows and Reflections",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    8,
+    29,
+    10
+   ],
+   "what": "Law of Reflection, Concave/Convex Mirror, Imagine IT — plane mirror, reflection, kaleidoscope",
+   "slot": "Any free period; Ch 11 is new this month",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 11: Light: Shadows and Reflections",
+   "type": "live",
+   "line": "VIS",
+   "models": [
+    8,
+    29,
+    10
+   ],
+   "what": "Visualisation — reflection, image properties",
+   "slot": "Any free period; pair with hardware",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 8,
+   "chapter": "Ch 10: Light: Mirrors and Lenses",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    8,
+    29,
+    15,
+    10
+   ],
+   "what": "Law of Reflection, mirrors, lens, Imagine IT — spherical mirrors, periscope",
+   "slot": "Any free period; Ch 10 new this month",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 8,
+   "chapter": "Ch 10: Light: Mirrors and Lenses",
+   "type": "live",
+   "line": "VIS",
+   "models": [
+    29,
+    15
+   ],
+   "what": "Visualisation — concave/convex mirror and lens",
+   "slot": "Any free period; pair with hardware",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 7: Work, Energy, and Simple Machines",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    12,
+    13,
+    14,
+    7
+   ],
+   "what": "Power Gen, Power Factor, PE & KE, Ubalance — power, pulley, conservation",
+   "slot": "Any free period; continuation of Oct chapters",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 10: Sound Waves: Characteristics and Applications",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    28,
+    30
+   ],
+   "what": "Basic of Sound + Propagation of Sound — characteristics, propagation",
+   "slot": "Any free period; Ch 10 begins Dec but may be introduced Nov",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 11: Electricity",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    2,
+    4
+   ],
+   "what": "Circuit Construction 2 & 4 — circuit diagrams, parallel circuits",
+   "slot": "Post-Mid Term revision block; Pre-Board period",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 12: Magnetic Effect of Electric Current",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    16,
+    17
+   ],
+   "what": "EMI, Electromagnetic Bell — electromagnet, solenoid revision",
+   "slot": "Post-Mid Term revision block",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 9: Light Reflection and Refraction",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    29,
+    15,
+    8
+   ],
+   "what": "Visualisation — spherical mirrors, refraction, lenses",
+   "slot": "Pre-Board revision",
+   "from": "2026-11-01",
+   "to": "2026-11-30"
+  },
+  {
+   "grade": 6,
+   "chapter": "Ch 7: Temperature and Its Measurement; Ch 8: A Journey Through States of Water",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    21,
+    27
+   ],
+   "what": "Peltier + Heat Transfer — Post MT revision syllabus Ch 7, 8",
+   "slot": "Post Mid Term revision block",
+   "from": "2026-12-01",
+   "to": "2026-12-31"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 7: Heat Transfer in Nature; Ch 8: Measurement of Time and Motion",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    27,
+    22,
+    23
+   ],
+   "what": "Heat Transfer, ATDG 1 & 2 — Post MT revision syllabus Ch 7, 8",
+   "slot": "Post Mid Term revision block",
+   "from": "2026-12-01",
+   "to": "2026-12-31"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 11: Light: Shadows and Reflections",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    8,
+    10
+   ],
+   "what": "Law of Reflection, Imagine IT — reflection, images",
+   "slot": "Any free period; Ch 11 continues this month",
+   "from": "2026-12-01",
+   "to": "2026-12-31"
+  },
+  {
+   "grade": 8,
+   "chapter": "Ch 10: Light: Mirrors and Lenses",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    8,
+    29,
+    15
+   ],
+   "what": "Reflection, mirrors, lens — Post MT revision syllabus Ch 10",
+   "slot": "Post Mid Term revision block",
+   "from": "2026-12-01",
+   "to": "2026-12-31"
+  },
+  {
+   "grade": 8,
+   "chapter": "Ch 4: Electricity: Magnetic and Heating Effects",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    3,
+    17
+   ],
+   "what": "Circuit Construction 3, Electromagnetic Bell — Post MT revision Ch 8, 9, 10",
+   "slot": "Post Mid Term revision block",
+   "from": "2026-12-01",
+   "to": "2026-12-31"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 10: Sound Waves: Characteristics and Applications",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    28,
+    30
+   ],
+   "what": "Basic of Sound + Propagation of Sound — sound characteristics",
+   "slot": "Before PT II (exam: 10–20 Dec); schedule first two weeks",
+   "from": "2026-12-01",
+   "to": "2026-12-09"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 7: Work, Energy, and Simple Machines",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    12,
+    13,
+    14
+   ],
+   "what": "Power Gen, Power Factor, PE & KE — PT II syllabus Ch 7",
+   "slot": "Before PT II; schedule first two weeks",
+   "from": "2026-12-01",
+   "to": "2026-12-09"
+  },
+  {
+   "grade": 6,
+   "chapter": "Ch 5: Measurement of Length and Motion; Ch 4: Exploring Magnets",
+   "type": "enrichment",
+   "line": "hardware",
+   "models": [
+    19,
+    5
+   ],
+   "what": "Motion Conversion 1 & 2 — types of motion, units",
+   "slot": "Post MT revision / final exam prep; enrichment top-up",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 8: Measurement of Time and Motion",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    19,
+    5
+   ],
+   "what": "Motion Conversion 1 & 2 — uniform motion, circular, oscillatory",
+   "slot": "Post Mid Term revision block",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 7,
+   "chapter": "Ch 3: Electricity: Circuits and Their Components; Ch 4: The World of Metals and Non-Metals",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    3,
+    9
+   ],
+   "what": "Circuit Construction 3, Types of Switches — conductors, insulators, switch",
+   "slot": "Post Mid Term revision block",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 8,
+   "chapter": "Ch 5: Exploring Forces; Ch 6: Pressure, Winds, Storms and Cyclones",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    6,
+    7,
+    25,
+    24
+   ],
+   "what": "Gear Ratio, Ubalance, Buoyant Force, Air Lock — forces, pressure, lever",
+   "slot": "Post Mid Term revision block",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 10: Sound Waves: Characteristics and Applications",
+   "type": "live",
+   "line": "hardware",
+   "models": [
+    28,
+    30
+   ],
+   "what": "Basic of Sound + Propagation of Sound — continuation",
+   "slot": "Any free period; continuation of Dec chapters",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 9,
+   "chapter": "Ch 7: Work, Energy, and Simple Machines",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    12,
+    14
+   ],
+   "what": "Visualisation — energy conservation, simple machines",
+   "slot": "Any free period; annual exam prep begins Feb",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 11: Electricity",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    2,
+    4
+   ],
+   "what": "Visualisation — circuit diagrams, series/parallel",
+   "slot": "Board exam revision block",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 12: Magnetic Effect of Electric Current",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    16,
+    20
+   ],
+   "what": "Visualisation — magnetic field, solenoid, field lines",
+   "slot": "Board exam revision block",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 10,
+   "chapter": "Ch 9: Light Reflection and Refraction",
+   "type": "revision",
+   "line": "hardware",
+   "models": [
+    29,
+    15,
+    8
+   ],
+   "what": "Mirrors, lenses, law of reflection — board revision",
+   "slot": "Board exam revision block",
+   "from": "2027-01-01",
+   "to": "2027-01-31"
+  },
+  {
+   "grade": 6,
+   "chapter": "Full syllabus revision",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    20,
+    27
+   ],
+   "what": "Visualisation — magnets, heat transfer; Common Final prep",
+   "slot": "Common Final Exam revision; avoid exam dates",
+   "from": "2027-02-01",
+   "to": "2027-02-28"
+  },
+  {
+   "grade": 7,
+   "chapter": "Full syllabus revision",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    8,
+    27,
+    22
+   ],
+   "what": "Visualisation — light, heat transfer, motion; Common Final prep",
+   "slot": "Common Final Exam revision; avoid exam dates",
+   "from": "2027-02-01",
+   "to": "2027-02-28"
+  },
+  {
+   "grade": 8,
+   "chapter": "Full syllabus revision",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    29,
+    15,
+    17
+   ],
+   "what": "Visualisation — mirrors, lenses, electromagnet; Common Final prep",
+   "slot": "Common Final Exam revision; avoid exam dates",
+   "from": "2027-02-01",
+   "to": "2027-02-28"
+  },
+  {
+   "grade": 6,
+   "chapter": "Full syllabus revision",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    19,
+    7
+   ],
+   "what": "Visualisation — motion, measurement; Common Final prep",
+   "slot": "Common Final Exam block; schedule before exam dates",
    "from": "2027-03-01",
-   "to": "2027-03-31",
-   "note": "Gr8 full syllabus revision"
+   "to": "2027-03-31"
+  },
+  {
+   "grade": 7,
+   "chapter": "Full syllabus revision",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    1,
+    9,
+    23
+   ],
+   "what": "Visualisation — circuits, switch, pendulum; Common Final prep",
+   "slot": "Common Final Exam block; schedule before exam dates",
+   "from": "2027-03-01",
+   "to": "2027-03-31"
+  },
+  {
+   "grade": 8,
+   "chapter": "Full syllabus revision",
+   "type": "revision",
+   "line": "VIS",
+   "models": [
+    6,
+    24,
+    25
+   ],
+   "what": "Visualisation — forces, pressure, buoyancy; Common Final prep",
+   "slot": "Common Final Exam block; schedule before exam dates",
+   "from": "2027-03-01",
+   "to": "2027-03-31"
   }
  ]
 }
