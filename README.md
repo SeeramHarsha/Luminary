@@ -32,8 +32,8 @@ link in Admin > Models next to the working / assembly video. The server stores n
 
 ## Using it
 - Admin > Models: folder image, a YouTube link for the working video and for the assembly video, and a separate cover image for each video (shown before the video plays; if none is set the folder image is used); rename or delete folders.
-- Admin > QR access: each QR opens the library with its own unlocked set ("Open all models", or tick models; Open all / Lock all buttons). "Download PNG" saves a printable card (QR + label).
-- Admin > Users: create user logins (optionally tied to a QR access set). QR visitors need no login.
+- Admin > Schools: each school gets a unique 4-digit code (visitors type it when they open Luminary) and a QR link that skips the code. Choose which models each school can open ("Open all models", or tick models; Open all / Lock all buttons). "Download PNG" saves a printable card. A school marked "Editor link" has no code (QR only) and can manage models and videos.
+- Admin > Users: create user logins (optionally tied to a QR access set). Visitors need no login, only their school code or QR.
 - Admin > Settings: change password, upload the real Luminary logo image.
 - Visitors: tap the download icon in the header, choose Data saver / Standard / HD, then "Download everything".
   Later QR scans open it from the device cache, even offline.

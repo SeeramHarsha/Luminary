@@ -10,7 +10,7 @@
 - **Friction in Student Access**: Requiring accounts, usernames, and passwords for young students creates significant classroom friction, delays, and lost login credentials.
 
 ### Luminary's Core Solutions
-1. **Zero-Friction Access**: Direct scanning of physical QR codes on kit boxes or opening the web address grants instant access with no login or password required for students/visitors.
+1. **Zero-Friction Access**: scanning the QR code on a kit box, or typing a 4-digit school code, grants instant access. No accounts, usernames or passwords for students.
 2. **Dual-Video Instruction**: Every kit features two parallel video tracks:
    - **Assembly Video**: Visual step-by-step construction instructions showing how physical pieces fit together.
    - **Working Video**: Demonstration of the completed model in action, explaining the physics/engineering theory behind it.
@@ -42,16 +42,23 @@ Luminary features an ultra-lightweight, touch-friendly player built specifically
 
 ---
 
-## 3. QR Code Access Control System
+## 3. School Codes & QR Access
 
-Luminary includes a dynamic QR generation and profile management system:
+Luminary asks every visitor for a **school code** before showing anything. Each school (class, group or customer) is created in **Admin > Schools** and gets:
 
-- **No Authentication Required**: Scanning a generated QR code immediately unlocks the relevant models without prompting for credentials.
-- **Granular Kit Profiles**: In the Admin panel, instructors can generate distinct QR codes tailored to specific groups or classes:
-  - *Full Access*: Unlocks all 32 models.
-  - *Custom Subset*: Restricts access to selected kits (e.g., only unlocking Kits 1–5 for a morning electrical circuits lab). Unticked models display an "Authorized QR Required" lock state.
-- **Smart LAN IP Detection**: When run locally or on a school server, QR codes automatically embed the server's local network Wi-Fi IP address (e.g., `http://192.168.1.39:3000/q/...`), ensuring physical smartphone cameras on the same Wi-Fi network connect directly.
-- **Printable Card Export ("Download PNG")**: Admins can download high-resolution (1100 × 1320 px) ready-to-print cards containing the QR code, kit title, instructions, and BotClub branding to paste onto physical kit boxes.
+- **A unique 4-digit code**, generated automatically (or chosen by the admin; it can be regenerated at any time). Visitors type it on the "Enter your school code" screen, which appears whenever someone opens Luminary without being signed in.
+- **A QR code and link** that open Luminary for that school without typing the code (print it on the kit box).
+- **Its own set of unlocked models**: *Open all models*, or tick the models the school may use (for example, only kits 1 to 5). Unticked models show a lock.
+
+How it behaves:
+- A correct code signs the device in for 90 days. **Account icon > Use a different school code** signs out.
+- Wrong codes show a clear message. After 10 wrong codes a visitor is paused for 10 minutes, and the whole site pauses after 200 wrong codes in 10 minutes, so guessing codes stays slow.
+- Deleting a school ends its sessions at once and its code stops working.
+- **Editor links** (a school with "Editor link" ticked, for people who manage videos and models) have **no 4-digit code**. They work only through their QR link, because a short code must never grant editing rights.
+- Admins sign in with the **Admin sign in** link on the code screen.
+- A 4-digit code is light protection, meant to keep casual visitors out. Do not use it for anything confidential.
+- **Smart LAN IP Detection**: when run locally or on a school server, QR codes embed the server's local network Wi-Fi IP address, so phones on the same Wi-Fi connect directly.
+- **Printable Card Export ("Download PNG")**: admins can download a ready-to-print card (QR code, name and branding) to paste on kit boxes.
 
 ---
 

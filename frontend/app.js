@@ -214,10 +214,42 @@
     await wipeDataCache();
     try { localStorage.removeItem('lm_qr'); } catch {}
     S.admin = null;
+    S.catalog = null;
     await loadMe();
-    await loadCatalog();
     location.hash = '#/';
     route();
+  }
+
+  // ---------- school code screen ----------
+  function schoolGate(note) {
+    const err = h('div', { class: 'err' }, note || '');
+    const input = h('input', { class: 'input', inputmode: 'numeric', pattern: '[0-9]*', maxlength: 4, autocomplete: 'off', placeholder: '0000', 'aria-label': 'School code', required: true, style: 'text-align:center;font-size:30px;letter-spacing:.45em;padding-left:.45em' });
+    const btn = h('button', { class: 'btn primary', style: 'width:100%', type: 'submit' }, 'Continue');
+    const form = h('form', {
+      onsubmit: async (e) => {
+        e.preventDefault();
+        if (!/^\d{4}$/.test(input.value)) { err.textContent = 'Please enter the 4-digit code of your school.'; return; }
+        btn.disabled = true; err.textContent = '';
+        try {
+          const d = await api('/api/school', { method: 'POST', body: { code: input.value } });
+          await wipeDataCache();
+          try { localStorage.setItem('lm_qr', d.code); } catch {}
+          await loadMe();
+          await loadCatalog();
+          location.hash = '#/';
+          route();
+        } catch (ex) { err.textContent = ex.message; btn.disabled = false; input.value = ''; input.focus(); }
+      },
+    }, h('label', { class: 'field' }, h('span', {}, 'School code'), input), err, btn);
+    input.addEventListener('input', () => { input.value = input.value.replace(/\D/g, '').slice(0, 4); if (input.value.length === 4) btn.click(); });
+    $app.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'box' },
+      logo(),
+      h('h2', { style: 'margin:14px 0 6px' }, 'Enter your school code'),
+      h('p', { class: 'lead' }, 'Ask your teacher for the 4-digit code of your school.'),
+      form,
+      h('p', { class: 'muted small', style: 'text-align:center;margin-top:16px' }, h('a', { href: '#/login' }, 'Admin sign in')),
+      footer())));
+    setTimeout(() => input.focus(), 50);
   }
 
   function adminLoginView(note) {
@@ -262,15 +294,15 @@
       const isAdmin = m.role === 'admin';
       const isStaff = isAdmin || m.role === 'editor';
       const isQr = m.via === 'qr';
-      box.append(
-        h('h2', {}, isStaff ? (m.name || 'Admin') : isQr ? 'QR Access' : 'Guest Visitor'),
-        h('p', { class: 'muted' }, isAdmin ? 'Signed in as Administrator' : isStaff ? 'Editor access: you can upload and manage models' : isQr ? `Opened with QR: ${m.profile?.label || 'Custom'}` : 'Browsing all models · No login required'),
+      box.append(...[
+        h('h2', {}, isStaff ? (m.name || 'Admin') : isQr ? 'School access' : 'Not signed in'),
+        h('p', { class: 'muted' }, isAdmin ? 'Signed in as Administrator' : isStaff ? 'Editor access: you can upload and manage models' : isQr ? `School: ${m.profile?.label || 'Custom'}` : 'Browsing all models · No login required'),
         isStaff ? h('a', { class: 'btn primary', style: 'width:100%;margin-bottom:10px', href: '#/admin', onclick: close }, isAdmin ? 'Open admin panel' : 'Manage models') : null,
         isAdmin
           ? h('button', { class: 'btn danger sm', style: 'width:100%;margin-bottom:10px', onclick: async () => { close(); await logout(); } }, 'Sign out')
           : h('a', { class: 'btn sm', style: 'width:100%;margin-bottom:10px', href: '#/admin', onclick: close }, 'Admin sign in'),
-        isQr ? h('button', { class: 'btn sm', style: 'width:100%;margin-bottom:10px', onclick: async () => { try { localStorage.removeItem('lm_qr'); } catch {} close(); await logout(); toast('Switched to all models'); } }, 'Reset to all models') : null,
-        h('button', { class: 'btn sm', style: 'width:100%', onclick: close }, 'Close'));
+        isQr ? h('button', { class: 'btn sm', style: 'width:100%;margin-bottom:10px', onclick: async () => { try { localStorage.removeItem('lm_qr'); } catch {} close(); await logout(); toast('Signed out of the school'); } }, 'Use a different school code') : null,
+        h('button', { class: 'btn sm', style: 'width:100%', onclick: close }, 'Close')].filter(Boolean)); // native append() would print "null" for empty items
     });
   }
 
@@ -364,6 +396,11 @@
 
   // ---------- routing ----------
   async function route() {
+    // nobody is signed in yet: ask for the school code (admins sign in from a link on that screen)
+    if (!S.me || S.me.via === 'guest') {
+      if (/^#\/(login|admin)/.test(location.hash)) return adminLoginView();
+      return schoolGate();
+    }
     if (!S.catalog) {
       try { await loadCatalog(); } catch (e) {
         toast(e.message, true);
@@ -391,6 +428,7 @@
 
   async function start() {
     await loadMe();
+    if (S.me.via === 'guest') return route();
     try { await loadCatalog(); } catch (e) {}
     if (!S.catalog) return $app.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'box' }, h('p', { class: 'lead' }, 'You are offline and nothing is saved on this device yet. Connect once to download the library.'), h('button', { class: 'btn primary', onclick: () => location.reload() }, 'Try again'))));
     route();

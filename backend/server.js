@@ -56,6 +56,15 @@ function save() {
   store.pushMeta('db.json');
 }
 const seedUploads = []; // seed photos that still have to reach the bucket
+// every school (access profile) has a unique 4-digit code that visitors type on the sign-in screen
+function genPin() {
+  const used = new Set(db.profiles.map((p) => p.pin));
+  for (let i = 0; i < 2000; i++) {
+    const pin = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+    if (!used.has(pin)) return pin;
+  }
+  throw new Error('All 10000 school codes are in use.');
+}
 function seedDb() {
   db = { models: [], profiles: [], users: [], settings: { logo: null } };
   SEED.forEach(([name, description], i) => {
@@ -69,7 +78,7 @@ function seedDb() {
     }
     db.models.push(m);
   });
-  db.profiles.push({ id: rid(4), code: rid(5), label: 'All models', mode: 'all', allowed: [] });
+  db.profiles.push({ id: rid(4), code: rid(5), pin: genPin(), label: 'All models', mode: 'all', allowed: [] });
   const adminUser = process.env.ADMIN_USER || 'admin';
   if (store.remote && !process.env.ADMIN_PASSWORD) throw new Error('Set ADMIN_PASSWORD before the first start with STORAGE=' + store.kind + ' (refusing to create admin/admin123 on a public server).');
   const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
@@ -80,6 +89,8 @@ function seedDb() {
 }
 if (fs.existsSync(DB_FILE)) db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
 else seedDb();
+// profiles made before school codes existed get one (editor links never get a code: they are QR-only)
+if (db.profiles.some((p) => !p.editor && !p.pin)) { db.profiles.forEach((p) => { if (!p.editor && !p.pin) p.pin = genPin(); }); save(); }
 
 // ---------- sessions (signed cookie) ----------
 function sign(o) {
@@ -133,9 +144,8 @@ function resolve(req) {
     if (p) return { role: p.editor ? 'editor' : 'viewer', via: 'qr', profile: p };
   }
 
-  // Default viewer access: open to everyone without password or credentials
-  const defaultProfile = db.profiles.find((p) => p.mode === 'all') || db.profiles[0] || null;
-  return { role: 'viewer', via: 'guest', profile: defaultProfile };
+  // No school code, QR or login yet: nothing is unlocked until the visitor enters a school code
+  return { role: 'viewer', via: 'guest', profile: null };
 }
 function allowedIds(s) {
   if (s.role === 'admin' || s.role === 'editor' || (s.profile && s.profile.mode === 'all')) return null; // null = everything
@@ -174,7 +184,7 @@ app.disable('x-powered-by');
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
 app.use((req, res, next) => { req.sess = resolve(req); next(); });
-const needAuth = (req, res, next) => (req.sess ? next() : res.status(401).json({ error: 'Not signed in' }));
+const needAuth = (req, res, next) => (req.sess && req.sess.via !== 'guest' ? next() : res.status(401).json({ error: 'Please enter your school code.' }));
 const needStaff = (req, res, next) => (req.sess && (req.sess.role === 'admin' || req.sess.role === 'editor') ? next() : res.status(403).json({ error: 'Not allowed' }));
 const needAdmin = (req, res, next) => (req.sess && req.sess.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only' }));
 const origin = (req) => {
@@ -236,6 +246,22 @@ app.post('/api/login', (req, res) => {
   attempts.delete(ip);
   setSession(req, res, { r: u.role, u: u.id });
   res.json({ ok: true, role: u.role });
+});
+
+// School code sign-in: 4 digits -> the same access a QR code of that school gives
+const schoolFails = { n: 0, t: Date.now() };
+app.post('/api/school', (req, res) => {
+  const now = Date.now();
+  if (now - schoolFails.t > 10 * 60e3) { schoolFails.n = 0; schoolFails.t = now; }
+  const key = 'school:' + req.ip;
+  // per visitor: 10 wrong codes per 10 minutes; for the whole site: 200 (guessing all 10000 codes must stay slow)
+  if (throttled(key) || schoolFails.n >= 200) return res.status(429).json({ error: 'Too many wrong codes. Please try again in a few minutes.' });
+  const code = String((req.body || {}).code || '').trim();
+  const p = /^\d{4}$/.test(code) ? db.profiles.find((x) => x.pin === code && !x.editor) : null;
+  if (!p) { attempts.get(key).n++; schoolFails.n++; return res.status(404).json({ error: 'That school code is not correct. Please check it and try again.' }); }
+  attempts.delete(key);
+  setSession(req, res, { r: 'qr', p: p.id });
+  res.json({ ok: true, label: p.label, code: p.code });
 });
 
 app.post('/api/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
@@ -434,7 +460,8 @@ A.delete('/models/:id/file/:slot', (req, res) => {
 // QR access profiles: each QR code opens the library with its own set of unlocked models
 const validIds = (ids) => (Array.isArray(ids) ? ids.filter((id) => findModel(id)) : []);
 A.post('/profiles', (req, res) => {
-  const p = { id: rid(4), code: rid(5), label: clean(req.body.label, 60) || 'New QR', mode: req.body.mode === 'custom' ? 'custom' : 'all', allowed: validIds(req.body.allowed), editor: req.body.editor === true };
+  const p = { id: rid(4), code: rid(5), label: clean(req.body.label, 60) || 'New school', mode: req.body.mode === 'custom' ? 'custom' : 'all', allowed: validIds(req.body.allowed), editor: req.body.editor === true };
+  p.pin = p.editor ? null : genPin();
   db.profiles.push(p);
   save();
   res.json(adminProfile(p, req));
@@ -442,10 +469,20 @@ A.post('/profiles', (req, res) => {
 A.patch('/profiles/:id', (req, res) => {
   const p = profileOf(req.params.id);
   if (!p) return res.status(404).json({ error: 'Not found' });
+  // check the school code first so a bad code changes nothing
+  const wantPin = req.body.pin !== undefined && String(req.body.pin).trim() !== '' ? String(req.body.pin).trim() : null;
+  if (wantPin !== null) {
+    if (!/^\d{4}$/.test(wantPin)) return res.status(400).json({ error: 'The school code must be exactly 4 digits.' });
+    if (db.profiles.some((x) => x !== p && x.pin === wantPin)) return res.status(409).json({ error: 'That code is already used by another school.' });
+  }
   if (req.body.label !== undefined) p.label = clean(req.body.label, 60) || p.label;
   if (req.body.mode) p.mode = req.body.mode === 'custom' ? 'custom' : 'all';
   if (req.body.allowed) p.allowed = validIds(req.body.allowed);
   if (req.body.editor !== undefined) p.editor = req.body.editor === true;
+  if (p.editor) p.pin = null; // editor links are QR-only: a 4-digit code must never grant editing
+  else if (req.body.regenPin) p.pin = genPin();
+  else if (wantPin !== null) p.pin = wantPin;
+  else if (!p.pin) p.pin = genPin();
   save();
   res.json(adminProfile(p, req));
 });

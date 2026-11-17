@@ -2,7 +2,7 @@
 // Admin panel - loaded on demand so visitors never download it.
 (() => {
   const { h, api, modal, toast, svg, mb, S, header, footer, loadCatalog } = window.LM;
-  const TABS = [['models', 'Models'], ['qr', 'QR access'], ['users', 'Users'], ['settings', 'Settings']];
+  const TABS = [['models', 'Models'], ['qr', 'Schools'], ['users', 'Users'], ['settings', 'Settings']];
   const dur = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '');
   const busy = (m) => ['working', 'assembly'].some((k) => m.files[k] && m.files[k].pending && m.files[k].pending.status === 'processing');
 
@@ -206,8 +206,8 @@
   function adminQr(A) {
     const wrap = h('div', { class: 'list' }, A.profiles.map((p) => qrCard(p, A)));
     return h('div', {},
-      h('p', { class: 'lead' }, 'Each QR code opens the library with its own set of unlocked models. Print different QR codes for different customers or kits.'),
-      h('button', { class: 'btn primary sm', style: 'margin-bottom:16px', onclick: async () => { try { await api('/api/admin/profiles', { method: 'POST', body: { label: 'New QR', mode: 'all' } }); refresh(); } catch (e) { toast(e.message, true); } } }, '+ New QR code'),
+      h('p', { class: 'lead' }, 'Each school has a 4-digit code that visitors type when they open Luminary, and a QR code that opens it without typing. Choose which models each school can open.'),
+      h('button', { class: 'btn primary sm', style: 'margin-bottom:16px', onclick: async () => { try { await api('/api/admin/profiles', { method: 'POST', body: { label: 'New school', mode: 'all' } }); refresh(); } catch (e) { toast(e.message, true); } } }, '+ New school'),
       wrap);
   }
 
@@ -249,7 +249,9 @@
     const sel = new Set(p.allowed);
     const editor = h('input', { type: 'checkbox' });
     editor.checked = !!p.editor;
-    const label = h('input', { class: 'input', value: p.label, maxlength: 60, 'aria-label': 'QR label' });
+    const label = h('input', { class: 'input', value: p.label, maxlength: 60, 'aria-label': 'School name' });
+    const pinIn = h('input', { class: 'input', value: p.pin || '', inputmode: 'numeric', maxlength: 4, placeholder: '0000', 'aria-label': 'School code', style: 'max-width:150px;text-align:center;font-size:22px;letter-spacing:.35em;padding-left:.35em' });
+    pinIn.oninput = () => { pinIn.value = pinIn.value.replace(/\D/g, '').slice(0, 4); };
     const checks = h('div', { class: 'checks' }, A.models.map((m) => {
       const cb = h('input', { type: 'checkbox', onchange: () => { cb.checked ? sel.add(m.id) : sel.delete(m.id); } });
       cb.checked = sel.has(m.id);
@@ -260,21 +262,25 @@
       h('button', { class: 'btn sm', onclick: () => setAll(true) }, 'Tick all'), h('button', { class: 'btn sm', onclick: () => setAll(false) }, 'Untick all'),
       h('span', { class: 'muted small' }, 'Ticked = open, unticked = locked')), checks);
     const seg = h('div', { class: 'seg' }, [['all', 'Open all models'], ['custom', 'Choose models']].map(([k, n]) => h('button', { class: k === mode ? 'on' : '', onclick: (e) => { mode = k; seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.target)); picker.hidden = k === 'all'; } }, n)));
+    const pinWrap = h('div', { class: 'field', hidden: !!p.editor }, h('span', {}, 'School code (4 digits, typed on the sign-in screen)'),
+      h('div', { class: 'row wrap' }, pinIn, h('button', { class: 'btn sm', onclick: () => save({ regenPin: true }, 'New code created') }, 'New random code')));
+    editor.addEventListener('change', () => { pinWrap.hidden = editor.checked; });
     const save = async (patch, msg) => { try { await api(`/api/admin/profiles/${p.id}`, { method: 'PATCH', body: patch }); toast(msg || 'Saved'); refresh(); } catch (e) { toast(e.message, true); } };
     const dl = h('button', { class: 'btn sm', style: 'margin-top:10px;width:100%', onclick: () => downloadQr(p, dl) }, 'Download PNG');
     return h('div', { class: 'card qrcard' },
       h('div', {}, h('img', { class: 'qr', src: `/api/admin/profiles/${p.id}/qr.png?size=400&t=${Date.now()}`, alt: 'QR code' }), dl),
       h('div', { class: 'grow' },
-        h('label', { class: 'field' }, h('span', {}, 'Label'), label),
+        h('label', { class: 'field' }, h('span', {}, 'School name'), label),
+        pinWrap,
         h('div', { class: 'row wrap', style: 'margin-bottom:12px' }, h('span', { class: 'link grow' }, p.link),
           h('button', { class: 'btn sm', onclick: () => { (navigator.clipboard ? navigator.clipboard.writeText(p.link) : Promise.reject()).then(() => toast('Link copied'), () => toast('Copy failed - select the link and copy it', true)); } }, 'Copy')),
         seg, picker,
         h('label', { class: 'check', style: 'margin-top:12px' }, editor, 'Editor link: anyone with this QR can upload and manage models and videos (not users, passwords or QR codes)'),
         h('div', { class: 'row wrap', style: 'margin-top:14px' },
-          h('button', { class: 'btn primary sm', onclick: () => save({ label: label.value, mode, allowed: [...sel], editor: editor.checked }) }, 'Save'),
+          h('button', { class: 'btn primary sm', onclick: () => save({ label: label.value, mode, allowed: [...sel], editor: editor.checked, pin: editor.checked ? undefined : pinIn.value }) }, 'Save'),
           h('button', { class: 'btn sm', onclick: () => save({ mode: 'all' }, 'All models opened') }, 'Open all'),
           h('button', { class: 'btn sm', onclick: () => save({ mode: 'custom', allowed: [] }, 'All models locked') }, 'Lock all'),
-          A.profiles.length > 1 ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Delete QR "${p.label}"? Printed copies will stop working.`)) return; try { await api(`/api/admin/profiles/${p.id}`, { method: 'DELETE' }); refresh(); } catch (e) { toast(e.message, true); } } }, 'Delete') : null)));
+          A.profiles.length > 1 ? h('button', { class: 'btn sm danger', onclick: async () => { if (!confirm(`Delete "${p.label}"? Its school code and printed QR codes will stop working.`)) return; try { await api(`/api/admin/profiles/${p.id}`, { method: 'DELETE' }); refresh(); } catch (e) { toast(e.message, true); } } }, 'Delete') : null)));
   }
 
   // ---------- users ----------
