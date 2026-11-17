@@ -365,7 +365,7 @@ app.get('/brand/logo', (req, res) => {
 const A = express.Router();
 // "editor" = opened through an editor QR link: may manage models and upload media, nothing else
 A.use(needStaff);
-A.use(['/profiles', '/users', '/password', '/logo'], needAdmin);
+A.use(['/profiles', '/users', '/password', '/logo', '/usage', '/usage.csv', '/calendar', '/calendar.csv'], needAdmin);
 
 const adminVideo = (m, s) => {
   const v = m.files[s];
@@ -439,7 +439,7 @@ A.delete('/models/:id', (req, res) => {
   rmFile(m.files.image); rmVideo(m.files.working); rmVideo(m.files.assembly);
   Object.values(m.covers || {}).forEach(rmFile);
   db.models = db.models.filter((x) => x !== m);
-  db.profiles.forEach((p) => { p.allowed = p.allowed.filter((id) => id !== m.id); });
+  db.profiles.forEach((p) => { p.allowed = p.allowed.filter((id) => id !== m.id); p.calendar = (p.calendar || []).filter((e) => e.model !== m.id); });
   save();
   res.json({ ok: true });
 });
@@ -542,6 +542,108 @@ A.delete('/profiles/:id', (req, res) => {
   save();
   res.json({ ok: true });
 });
+// ---------- academic calendar per school ----------
+// profile.calendar = [{ id, model, from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }]: the model a school should cover in that period.
+// Compared with the usage counters to tell whether the model was opened in time. Dates are UTC days (like the usage counters).
+const isDate = (x) => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) && !isNaN(Date.parse(x + 'T00:00:00Z')) && new Date(x + 'T00:00:00Z').toISOString().slice(0, 10) === x;
+const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+function calendarReport(p, today = dayKey()) {
+  const days = ((db.stats || {})[p.id] || {}).days || {};
+  const act = {}; // model -> [[day, views, plays]]
+  for (const [d, x] of Object.entries(days)) for (const [mid, [v, pl]] of Object.entries(x.m || {})) if (v || pl) (act[mid] = act[mid] || []).push([d, v, pl]);
+  const entries = (p.calendar || []).map((e) => {
+    let views = 0; let plays = 0; let firstIn = null; let firstEarly = null; let firstLate = null;
+    for (const [d, v, pl] of act[e.model] || []) {
+      if (d < e.from) { if (!firstEarly || d < firstEarly) firstEarly = d; }
+      else if (d <= e.to) { views += v; plays += pl; if (!firstIn || d < firstIn) firstIn = d; }
+      else if (d <= today) { if (!firstLate || d < firstLate) firstLate = d; }
+    }
+    let status;
+    if (firstIn) status = 'done'; // opened inside its dates
+    else if (today < e.from) status = firstEarly ? 'early' : 'upcoming';
+    else if (today <= e.to) status = 'due'; // its dates are running and it has not been opened yet
+    else status = firstEarly ? 'early' : firstLate ? 'late' : 'missed';
+    const m = findModel(e.model);
+    return { id: e.id, model: e.model, number: m ? m.number : 0, name: m ? m.name : 'Removed model', from: e.from, to: e.to, status, views, plays, first: firstIn || firstEarly || firstLate, earlyOpen: !!firstEarly };
+  }).sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.number - b.number));
+  const n = (k) => entries.filter((e) => e.status === k).length;
+  return { entries, summary: { total: entries.length, opened: n('done') + n('early'), late: n('late'), missed: n('missed'), due: n('due'), upcoming: n('upcoming') } };
+}
+const schoolOf = (id) => { const p = profileOf(id); return p && !p.editor ? p : null; };
+const planModels = (p) => [...db.models].sort((a, b) => a.number - b.number).filter((m) => p.mode === 'all' || (p.allowed || []).includes(m.id));
+function checkEntry(b, p) {
+  if (!findModel(b.model) || !(p.mode === 'all' || (p.allowed || []).includes(b.model))) return 'Choose a model this school can open.';
+  if (!isDate(b.from) || !isDate(b.to)) return 'Please choose both dates.';
+  if (b.to < b.from) return 'The end date must not be before the start date.';
+  return null;
+}
+A.get('/calendar', (req, res) => {
+  const today = dayKey();
+  const schools = db.profiles.filter((p) => !p.editor).map((p) => ({ id: p.id, label: p.label, pin: p.pin, ...calendarReport(p, today) }));
+  res.json({ today, schools, models: [...db.models].sort((a, b) => a.number - b.number).map((m) => ({ id: m.id, number: m.number, name: m.name })) });
+});
+A.get('/calendar.csv', (req, res) => {
+  const today = dayKey();
+  const label = { done: 'Opened in time', early: 'Opened before its dates', due: 'Due now - not opened', upcoming: 'Upcoming', late: 'Opened late', missed: 'Not opened' };
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const lines = [['School', 'School code', 'Model no.', 'Model', 'From', 'To', 'Status', 'First opened (UTC date)', 'Model pages opened in the dates', 'Videos played in the dates'].map(q).join(',')];
+  for (const p of db.profiles.filter((x) => !x.editor)) for (const e of calendarReport(p, today).entries) lines.push([p.label, p.pin, e.number, e.name, e.from, e.to, label[e.status], e.first || '', e.views, e.plays].map(q).join(','));
+  res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="luminary-calendar-status.csv"' }).send('\ufeff' + lines.join('\r\n'));
+});
+A.post('/profiles/:id/calendar', (req, res) => {
+  const p = schoolOf(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  const b = req.body || {};
+  const err = checkEntry(b, p);
+  if (err) return res.status(400).json({ error: err });
+  p.calendar = p.calendar || [];
+  if (p.calendar.length >= 300) return res.status(400).json({ error: 'A calendar can have up to 300 entries.' });
+  p.calendar.push({ id: rid(4), model: b.model, from: b.from, to: b.to });
+  save();
+  res.json({ ok: true });
+});
+A.patch('/profiles/:id/calendar/:eid', (req, res) => {
+  const p = schoolOf(req.params.id);
+  const e = p && (p.calendar || []).find((x) => x.id === req.params.eid);
+  if (!e) return res.status(404).json({ error: 'Not found' });
+  const nb = { model: req.body.model || e.model, from: req.body.from || e.from, to: req.body.to || e.to };
+  const err = checkEntry(nb, p);
+  if (err) return res.status(400).json({ error: err });
+  Object.assign(e, nb);
+  save();
+  res.json({ ok: true });
+});
+A.delete('/profiles/:id/calendar/:eid', (req, res) => {
+  const p = schoolOf(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  p.calendar = (p.calendar || []).filter((x) => x.id !== req.params.eid);
+  save();
+  res.json({ ok: true });
+});
+// plan: one model after another, N days each, starting on a date (for one school or all of them)
+A.post('/calendar/plan', (req, res) => {
+  const { to, start } = req.body || {};
+  const days = Math.round(+req.body.days);
+  if (!isDate(start)) return res.status(400).json({ error: 'Please choose the start date.' });
+  if (!(days >= 1 && days <= 120)) return res.status(400).json({ error: 'Days per model must be between 1 and 120.' });
+  const targets = to === 'all' ? db.profiles.filter((p) => !p.editor) : [schoolOf(to)].filter(Boolean);
+  if (!targets.length) return res.status(404).json({ error: 'Not found' });
+  for (const p of targets) p.calendar = planModels(p).map((m, i) => ({ id: rid(4), model: m.id, from: addDays(start, i * days), to: addDays(start, (i + 1) * days - 1) }));
+  save();
+  res.json({ ok: true, schools: targets.length });
+});
+// copy one school's calendar to another school (or all others)
+A.post('/calendar/copy', (req, res) => {
+  const src = schoolOf((req.body || {}).from);
+  if (!src) return res.status(404).json({ error: 'Not found' });
+  const to = req.body.to;
+  const targets = to === 'all' ? db.profiles.filter((p) => !p.editor && p !== src) : [schoolOf(to)].filter((p) => p && p !== src);
+  if (!targets.length) return res.status(400).json({ error: 'Choose another school to copy to.' });
+  for (const p of targets) p.calendar = (src.calendar || []).filter((e) => p.mode === 'all' || (p.allowed || []).includes(e.model)).map((e) => ({ ...e, id: rid(4) }));
+  save();
+  res.json({ ok: true, schools: targets.length });
+});
+
 // Usage report: one row per school for the last N days
 function usageReport(days) {
   const since = dayKey(Date.now() - (days - 1) * 864e5);
@@ -550,7 +652,7 @@ function usageReport(days) {
   for (let i = 13; i >= 0; i--) spark.push(dayKey(Date.now() - i * 864e5));
   const rows = db.profiles.filter((p) => !p.editor).map((p) => {
     const st = (db.stats || {})[p.id];
-    const r = { id: p.id, label: p.label, pin: p.pin, visits: 0, views: 0, plays: 0, seconds: 0, activeDays: 0, last: st ? st.last : null, top: [], spark: spark.map(() => 0) };
+    const r = { id: p.id, label: p.label, pin: p.pin, cal: calendarReport(p).summary, visits: 0, views: 0, plays: 0, seconds: 0, activeDays: 0, last: st ? st.last : null, top: [], spark: spark.map(() => 0) };
     if (!st) return r;
     const per = new Map();
     for (const [d, x] of Object.entries(st.days)) {
