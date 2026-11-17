@@ -288,7 +288,7 @@
   // ---------- academic calendar ----------
   const CAL = {
     done: ['Opened in time', '#2fbf71'], early: ['Opened before its dates', '#2fbf71'], due: ['Due now · not opened yet', '#f5a524'],
-    upcoming: ['Upcoming', '#7a8cff'], late: ['Opened late', '#ff8a3d'], missed: ['Not opened', '#ff5d6c'], untracked: ['Before tracking started', '#8a8fa3'],
+    upcoming: ['Upcoming', '#7a8cff'], late: ['Opened late', '#ff8a3d'], missed: ['Delayed', '#ff5d6c'],
   };
   const calBadge = (st) => h('span', { class: 'chip', style: `border-color:${CAL[st][1]};color:${CAL[st][1]}` }, CAL[st][0]);
   const fmtDay = (x) => (x ? new Date(x + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
@@ -303,7 +303,7 @@
       const cards = [...C.schools].sort((a, b) => attention(b) - attention(a)).map((x) => {
         const m = x.summary;
         const pct = m.total ? Math.round((m.opened / m.total) * 100) : 0;
-        const chips = [m.missed ? ['missed', m.missed] : null, m.late ? ['late', m.late] : null, m.due ? ['due', m.due] : null, m.upcoming ? ['upcoming', m.upcoming] : null, m.untracked ? ['untracked', m.untracked] : null].filter(Boolean)
+        const chips = [m.missed ? ['missed', m.missed] : null, m.late ? ['late', m.late] : null, m.due ? ['due', m.due] : null, m.upcoming ? ['upcoming', m.upcoming] : null].filter(Boolean)
           .map(([k, n]) => h('span', { class: 'chip', style: `border-color:${CAL[k][1]};color:${CAL[k][1]}` }, `${n} ${CAL[k][0].split(' ·')[0].toLowerCase()}`));
         return h('div', { class: 'card', style: 'cursor:pointer', onclick: () => go(x.id) },
           h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, x.label), h('span', { class: 'muted small' }, m.total ? `${m.opened} of ${m.total} models opened` : 'No calendar yet')),
@@ -338,9 +338,8 @@
       const t = h('input', { class: 'input', type: 'date', value: e.to, 'aria-label': 'To', style: 'flex:1;min-width:140px;width:auto', onchange: () => call(`/api/admin/profiles/${sel.id}/calendar/${e.id}`, 'PATCH', { from: f.value, to: t.value }, 'Dates saved') });
       const detail = e.status === 'done' ? `Opened ${fmtDay(e.first)} · ${e.plays} video ${e.plays === 1 ? 'play' : 'plays'}`
         : e.status === 'early' ? `First opened ${fmtDay(e.first)}, before its dates`
-        : e.status === 'late' ? `First opened ${fmtDay(e.first)}, after its dates`
-        : e.status === 'untracked' ? 'Its dates were over before this school was added, so it is not counted.'
-        : e.status === 'due' ? (e.earlyOpen ? `Opened earlier on ${fmtDay(e.first)}, not yet in its dates` : 'Not opened yet') : e.status === 'missed' ? 'Never opened' : '';
+        : e.status === 'late' ? `Delayed: first opened ${fmtDay(e.first)}, ${e.delayDays} ${e.delayDays === 1 ? 'day' : 'days'} after its dates ended`
+        : e.status === 'due' ? (e.earlyOpen ? `Opened earlier on ${fmtDay(e.first)}, not yet in its dates` : 'Not opened yet') : e.status === 'missed' ? `Delayed by ${e.delayDays} ${e.delayDays === 1 ? 'day' : 'days'}: its dates ended ${fmtDay(e.to)} and it has not been opened yet` : '';
       return h('div', { class: 'card' },
         h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, `${String(e.number).padStart(2, '0')} · ${e.name}`), calBadge(e.status)),
         h('div', { class: 'row wrap', style: 'margin:8px 0;gap:8px;align-items:center' }, f, h('span', { class: 'muted small' }, 'to'), t,
@@ -351,7 +350,7 @@
     const out = h('div', {},
       h('button', { class: 'crumb', onclick: () => go(null) }, h('span', { html: svg('back') }), 'All schools'),
       h('h2', { style: 'margin:6px 0 4px' }, sel.label),
-      h('p', { class: 'muted small' }, m.total ? `${m.opened} of ${m.total} models opened${m.missed ? ' · ' + m.missed + ' not opened' : ''}${m.late ? ' · ' + m.late + ' late' : ''}${m.due ? ' · ' + m.due + ' due now' : ''}${m.upcoming ? ' · ' + m.upcoming + ' upcoming' : ''}${m.untracked ? ' · ' + m.untracked + ' before tracking started' : ''}` : 'No calendar yet. Create a plan below, or add models one by one.'),
+      h('p', { class: 'muted small' }, m.total ? `${m.opened} of ${m.total} models opened${m.missed ? ' · ' + m.missed + ' delayed' : ''}${m.late ? ' · ' + m.late + ' late' : ''}${m.due ? ' · ' + m.due + ' due now' : ''}${m.upcoming ? ' · ' + m.upcoming + ' upcoming' : ''}` : 'No calendar yet. Create a plan below, or add models one by one.'),
       h('div', { class: 'card' }, h('h3', { style: 'margin:0 0 6px' }, 'Create a plan'),
         h('p', { class: 'muted small' }, 'Models one after another, in number order, with the days you choose for each. This replaces the calendar of this school (only the models it can open are used).'),
         h('div', { class: 'row wrap', style: 'gap:8px;align-items:end' }, h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'First day'), startIn), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'Days per model'), daysIn),
@@ -391,7 +390,7 @@
         h('div', {}, h('div', { style: 'font-size:20px;font-weight:600' }, r.views), h('div', { class: 'muted small' }, 'Model pages')),
         h('div', {}, h('div', { style: 'font-size:20px;font-weight:600' }, r.visits), h('div', { class: 'muted small' }, 'Visits')),
         h('div', {}, h('div', { style: 'font-size:20px;font-weight:600' }, r.activeDays), h('div', { class: 'muted small' }, 'Active days'))),
-      r.cal && r.cal.total ? h('div', { class: 'small', style: 'margin-bottom:8px' }, `Calendar: ${r.cal.opened} of ${r.cal.total} models opened` + (r.cal.missed ? ` · ${r.cal.missed} not opened` : '') + (r.cal.late ? ` · ${r.cal.late} late` : '') + (r.cal.due ? ` · ${r.cal.due} due now` : '')) : null,
+      r.cal && r.cal.total ? h('div', { class: 'small', style: 'margin-bottom:8px' }, `Calendar: ${r.cal.opened} of ${r.cal.total} models opened` + (r.cal.missed ? ` · ${r.cal.missed} delayed` : '') + (r.cal.late ? ` · ${r.cal.late} opened late` : '') + (r.cal.due ? ` · ${r.cal.due} due now` : '')) : null,
       r.seconds || r.plays ? bars(r.spark) : null,
       r.top.length ? h('div', { class: 'muted small', style: 'margin-top:10px' }, 'Most used: ' + r.top.map((t) => String(t.number).padStart(2, '0') + ' ' + t.name + (t.plays ? ` (${t.plays} ${t.plays === 1 ? 'play' : 'plays'})` : '')).join(' · ')) : h('div', { class: 'muted small', style: 'margin-top:6px' }, 'No activity in this period yet.')));
     return h('div', {},

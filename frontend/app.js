@@ -308,7 +308,7 @@
   }
 
   // ---------- the school's academic calendar ----------
-  const PLAN_LABEL = { now: 'Now', next: 'Next', overdue: 'To open', done: '\u2713 Opened' };
+  const PLAN_LABEL = { now: 'Now', next: 'Next', overdue: 'Delayed', done: '\u2713 Opened' };
   const fmtPlanDay = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const planDates = (p) => (p.from === p.to ? fmtPlanDay(p.from) : fmtPlanDay(p.from) + ' \u2013 ' + fmtPlanDay(p.to));
   const planPill = (state) => h('span', { class: 'planpill ' + state }, PLAN_LABEL[state]);
@@ -318,14 +318,17 @@
     if (!list.length) return null;
     const by = (k) => list.filter((m) => m.plan.state === k).sort((x, y) => (x.plan.from < y.plan.from ? -1 : 1));
     const opened = by('done').length;
-    const row = (m) => h('a', { class: 'planrow', href: '#/m/' + m.id }, planPill(m.plan.state), h('span', { class: 'nm' }, String(m.number).padStart(2, '0') + ' \u00b7 ' + m.name), h('span', { class: 'muted small' }, planDates(m.plan)));
+    const row = (m) => h('a', { class: 'planrow', href: '#/m/' + m.id }, planPill(m.plan.state), h('span', { class: 'nm' }, String(m.number).padStart(2, '0') + ' \u00b7 ' + m.name), h('span', { class: 'muted small' }, planDates(m.plan) + (m.plan.state === 'overdue' && m.plan.days ? ` \u00b7 ${m.plan.days} ${m.plan.days === 1 ? 'day' : 'days'} late` : '')));
     const over = by('overdue');
-    const rows = [...by('now').map(row), ...over.slice(0, 3).map(row), ...by('next').slice(0, 1).map(row)];
+    const now = by('now');
+    // delayed models first (they need attention), then what is due now; long lists are trimmed
+    const rows = [...over.slice(0, 3).map(row), ...now.slice(0, 5).map(row), ...(now.length ? [] : by('next').slice(0, 1).map(row))];
     return h('section', { class: 'card plancard' },
       h('div', { class: 'row wrap' }, h('b', { class: 'grow' }, "Your school's plan"), h('span', { class: 'muted small' }, `${opened} of ${list.length} models opened`)),
       h('div', { class: 'bar', style: 'margin:10px 0 6px' }, h('i', { style: `width:${Math.round((opened / list.length) * 100)}%` })),
-      over.length > 3 ? h('div', { class: 'muted small' }, `${over.length} models are still to open.`) : null,
-      ...(rows.length ? rows : [h('div', { class: 'muted small' }, 'Everything planned so far has been opened. Well done!')]));
+      over.length ? h('div', { class: 'small', style: 'color:#ff8a3d;margin-bottom:4px' }, `${over.length} ${over.length === 1 ? 'model is' : 'models are'} delayed: their dates are over and ${over.length === 1 ? 'it has' : 'they have'} not been opened yet.`) : null,
+      ...(rows.length ? rows : [h('div', { class: 'muted small' }, 'Everything planned so far has been opened. Well done!')]),
+      over.length > 3 || now.length > 5 ? h('div', { class: 'muted small', style: 'margin-top:8px' }, [over.length > 3 ? `${over.length - 3} more delayed` : '', now.length > 5 ? `${now.length - 5} more to open now` : ''].filter(Boolean).join(' · ') + '. The tag on each model tile below shows its status.') : null);
   }
 
   function folder(m, i) {

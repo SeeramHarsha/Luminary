@@ -313,7 +313,7 @@ app.post('/api/track', (req, res) => {
 
 app.post('/api/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
 
-// the school's own calendar, per model: 'now' (its dates are running), 'next', 'overdue' (dates over, not opened) or 'done' (opened)
+// the school's own calendar, per model: 'now' (its dates are running), 'next', 'overdue' = delayed (dates over, not opened) or 'done' (opened)
 function planFor(sess) {
   const pid = trackedProfile(sess);
   const p = pid && profileOf(pid);
@@ -321,10 +321,9 @@ function planFor(sess) {
   const rank = { now: 0, overdue: 1, next: 2, done: 3 };
   const map = new Map();
   for (const e of calendarReport(p).entries) {
-    if (e.status === 'untracked') continue;
     const state = e.status === 'due' ? 'now' : e.status === 'upcoming' ? 'next' : e.status === 'missed' ? 'overdue' : 'done'; // opened late still counts as opened
     const prev = map.get(e.model);
-    if (!prev || rank[state] < rank[prev.state] || (state === prev.state && e.from < prev.from)) map.set(e.model, { from: e.from, to: e.to, state, note: e.note });
+    if (!prev || rank[state] < rank[prev.state] || (state === prev.state && e.from < prev.from)) map.set(e.model, { from: e.from, to: e.to, state, note: e.note, days: e.status === 'missed' ? e.delayDays : 0 });
   }
   return map;
 }
@@ -568,7 +567,6 @@ function calendarReport(p, today = dayKey()) {
   const days = ((db.stats || {})[p.id] || {}).days || {};
   const act = {}; // model -> [[day, views, plays]]
   for (const [d, x] of Object.entries(days)) for (const [mid, [v, pl]] of Object.entries(x.m || {})) if (v || pl) (act[mid] = act[mid] || []).push([d, v, pl]);
-  const startDay = p.created ? dayKey(p.created) : '0000-00-00'; // usage is only counted from the day the school was added
   const entries = (p.calendar || []).map((e) => {
     let views = 0; let plays = 0; let firstIn = null; let firstEarly = null; let firstLate = null;
     for (const [d, v, pl] of act[e.model] || []) {
@@ -578,15 +576,16 @@ function calendarReport(p, today = dayKey()) {
     }
     let status;
     if (firstIn) status = 'done'; // opened inside its dates
-    else if (e.to < startDay) status = 'untracked'; // its dates were over before the school was added: cannot be judged, whatever happens later
     else if (today < e.from) status = firstEarly ? 'early' : 'upcoming';
     else if (today <= e.to) status = 'due'; // its dates are running and it has not been opened yet
-    else status = firstEarly ? 'early' : firstLate ? 'late' : e.to < startDay ? 'untracked' : 'missed'; // dates over before tracking began: cannot be judged
+    else status = firstEarly ? 'early' : firstLate ? 'late' : 'missed'; // 'missed' is shown as Delayed: dates over, never opened
     const m = findModel(e.model);
-    return { id: e.id, model: e.model, number: m ? m.number : 0, name: m ? m.name : 'Removed model', from: e.from, to: e.to, note: e.note || '', status, views, plays, first: firstIn || firstEarly || firstLate, earlyOpen: !!firstEarly };
+    const gap = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
+    const delayDays = status === 'missed' ? gap(e.to, today) : status === 'late' ? gap(e.to, firstLate) : 0; // days after its dates (still waiting, or when it was first opened)
+    return { id: e.id, model: e.model, number: m ? m.number : 0, name: m ? m.name : 'Removed model', from: e.from, to: e.to, note: e.note || '', status, delayDays, views, plays, first: firstIn || firstEarly || firstLate, earlyOpen: !!firstEarly };
   }).sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.number - b.number));
   const n = (k) => entries.filter((e) => e.status === k).length;
-  return { entries, summary: { total: entries.length - n('untracked'), opened: n('done') + n('early'), late: n('late'), missed: n('missed'), due: n('due'), upcoming: n('upcoming'), untracked: n('untracked') } };
+  return { entries, summary: { total: entries.length, opened: n('done') + n('early') + n('late'), late: n('late'), missed: n('missed'), due: n('due'), upcoming: n('upcoming') } };
 }
 const schoolOf = (id) => { const p = profileOf(id); return p && !p.editor ? p : null; };
 const planModels = (p) => [...db.models].sort((a, b) => a.number - b.number).filter((m) => p.mode === 'all' || (p.allowed || []).includes(m.id));
@@ -603,10 +602,10 @@ A.get('/calendar', (req, res) => {
 });
 A.get('/calendar.csv', (req, res) => {
   const today = dayKey();
-  const label = { done: 'Opened in time', early: 'Opened before its dates', due: 'Due now - not opened', upcoming: 'Upcoming', late: 'Opened late', missed: 'Not opened', untracked: 'Before tracking started' };
+  const label = { done: 'Opened in time', early: 'Opened before its dates', due: 'Due now - not opened', upcoming: 'Upcoming', late: 'Opened late (delayed)', missed: 'Delayed - not opened' };
   const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const lines = [['School', 'School code', 'Model no.', 'Model', 'From', 'To', 'Status', 'First opened (UTC date)', 'Model pages opened in the dates', 'Videos played in the dates', 'Note'].map(q).join(',')];
-  for (const p of db.profiles.filter((x) => !x.editor)) for (const e of calendarReport(p, today).entries) lines.push([p.label, p.pin, e.number, e.name, e.from, e.to, label[e.status], e.first || '', e.views, e.plays, e.note].map(q).join(','));
+  const lines = [['School', 'School code', 'Model no.', 'Model', 'From', 'To', 'Status', 'First opened (UTC date)', 'Model pages opened in the dates', 'Videos played in the dates', 'Days delayed', 'Note'].map(q).join(',')];
+  for (const p of db.profiles.filter((x) => !x.editor)) for (const e of calendarReport(p, today).entries) lines.push([p.label, p.pin, e.number, e.name, e.from, e.to, label[e.status], e.first || '', e.views, e.plays, e.delayDays || '', e.note].map(q).join(','));
   res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="luminary-calendar-status.csv"' }).send('\ufeff' + lines.join('\r\n'));
 });
 A.post('/profiles/:id/calendar', (req, res) => {
