@@ -325,12 +325,12 @@
   const calDur = (s) => (!s ? '' : s < 60 ? s + ' sec' : s < 3600 ? Math.round(s / 60) + ' min' : Math.floor(s / 3600) + ' h ' + Math.round((s % 3600) / 60) + ' min');
   const chapterShort = (c) => (/^Full syllabus/i.test(c) ? 'full syllabus rev' : (c.match(/Ch \d+/g) || []).join(' & ') || c);
   // timetable download: one row per session, months only, opens in Excel / Sheets
-  function downloadTimetable(rep) {
+  function downloadTimetable(rep, ym) {
     const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const lines = [['Month', 'Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Status', 'Time spent'].map(q).join(',')];
-    for (const e of rep.entries) lines.push([calMonths(e.from, e.to), e.grade || '', e.chapter || e.note || '', e.type || '', e.line || '', (e.items || []).map((i) => pad2(i.number) + ' ' + i.name + (OPENED_ST.includes(i.status) ? ' (opened' + (i.seconds ? ', ' + calDur(i.seconds) : '') + ')' : ' (not opened)')).join('; '), e.what || '', e.slot || '', CAL_ST[e.status] ? CAL_ST[e.status][0] : '', calDur(e.seconds)].map(q).join(','));
+    for (const e of rep.entries.filter((x) => !ym || x.from.slice(0, 7) === ym)) lines.push([calMonths(e.from, e.to), e.grade || '', e.chapter || e.note || '', e.type || '', e.line || '', (e.items || []).map((i) => pad2(i.number) + ' ' + i.name + (OPENED_ST.includes(i.status) ? ' (opened' + (i.seconds ? ', ' + calDur(i.seconds) : '') + ')' : ' (not opened)')).join('; '), e.what || '', e.slot || '', CAL_ST[e.status] ? CAL_ST[e.status][0] : '', calDur(e.seconds)].map(q).join(','));
     const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = h('a', { href: URL.createObjectURL(blob), download: ((rep.school || rep.label || 'school') + ' timetable').replace(/[^\w ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() + '.csv' });
+    const a = h('a', { href: URL.createObjectURL(blob), download: ((rep.school || rep.label || 'school') + ' timetable' + (ym ? ' ' + ym : '')).replace(/[^\w ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() + '.csv' });
     document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
   function calPage(rep, opt = {}) {
@@ -376,7 +376,7 @@
         if (adm) cells.push(h('td', {}, h('button', { class: 'btn sm danger', onclick: () => adm.onRemove(e.id) }, 'Remove')));
         return h('tr', {}, cells);
       });
-      root.append(h('h3', { class: 'calmonth' }, MONTHS[+ym.slice(5, 7) - 1] + ' ' + ym.slice(0, 4)),
+      root.append(h('h3', { class: 'calmonth', style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap' }, MONTHS[+ym.slice(5, 7) - 1] + ' ' + ym.slice(0, 4), h('button', { class: 'btn sm', style: 'font-weight:500', onclick: () => downloadTimetable(rep, ym) }, 'Download this month')),
         h('div', { class: 'calwrap' }, h('table', { class: 'caltab' }, h('thead', {}, h('tr', {}, head.map((t) => h('th', {}, t)))), h('tbody', {}, rows))));
     }
     // every model of the plan: where it lands, and whether it was opened
