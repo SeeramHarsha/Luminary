@@ -347,6 +347,8 @@
       h('p', { class: 'muted small' }, summary),
       sel.entries.length ? h('div', { class: 'row wrap', style: 'margin:8px 0 14px;gap:10px;align-items:center' },
         h('button', { class: 'btn primary sm', onclick: () => { S.calEdit = !editing; refresh(); } }, editing ? 'View calendar' : 'Edit calendar'),
+        h('button', { class: 'btn sm', onclick: () => window.LM.downloadTimetable(sel) }, 'Download timetable'),
+        h('button', { class: 'btn sm', onclick: () => window.print() }, 'Print / save as PDF'),
         h('span', { class: 'muted small' }, editing ? 'Edit mode: change dates, remove rows, or use the planning tools below.' : 'View mode: this is what the school sees. Nothing can be changed here.')) : null,
       sel.entries.length ? table : null,
       h('div', { class: 'card', style: 'margin-top:20px' }, h('h3', { style: 'margin:0 0 6px' }, 'Create a simple plan'),

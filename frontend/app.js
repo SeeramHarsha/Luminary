@@ -323,6 +323,15 @@
   };
   const lastDay = (ym) => { const [y, m] = ym.split('-').map(Number); return ym + '-' + pad2(new Date(Date.UTC(y, m, 0)).getUTCDate()); };
   const chapterShort = (c) => (/^Full syllabus/i.test(c) ? 'full syllabus rev' : (c.match(/Ch \d+/g) || []).join(' & ') || c);
+  // timetable download: one row per session, months only, opens in Excel / Sheets
+  function downloadTimetable(rep) {
+    const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const lines = [['Month', 'Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Status'].map(q).join(',')];
+    for (const e of rep.entries) lines.push([calMonths(e.from, e.to), e.grade || '', e.chapter || e.note || '', e.type || '', e.line || '', (e.items || []).map((i) => pad2(i.number) + ' ' + i.name).join('; '), e.what || '', e.slot || '', CAL_ST[e.status] ? CAL_ST[e.status][0] : ''].map(q).join(','));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = h('a', { href: URL.createObjectURL(blob), download: ((rep.school || rep.label || 'school') + ' timetable').replace(/[^\w ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() + '.csv' });
+    document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
   function calPage(rep, opt = {}) {
     const info = rep.info || {};
     const adm = opt.admin;
@@ -394,7 +403,7 @@
     let rep;
     try { rep = await api('/api/plan'); } catch (e) { toast(e.message, true); location.hash = '#/'; return; }
     const back = h('button', { class: 'crumb', onclick: () => (location.hash = '#/') }, h('span', { html: svg('back') }), 'All models');
-    $app.replaceChildren(h('div', { class: 'page' }, header(), h('main', {}, back, h('h1', {}, rep.school + ' ', h('span', { class: 'grad' }, 'calendar')), calPage(rep, { link: true })), footer()));
+    $app.replaceChildren(h('div', { class: 'page' }, header(), h('main', {}, back, h('h1', {}, rep.school + ' ', h('span', { class: 'grad' }, 'calendar')), h('div', { class: 'row wrap', style: 'gap:8px;margin:0 0 12px' }, h('button', { class: 'btn primary sm', onclick: () => downloadTimetable(rep) }, 'Download timetable'), h('button', { class: 'btn sm', onclick: () => window.print() }, 'Print / save as PDF')), calPage(rep, { link: true })), footer()));
     window.scrollTo(0, 0);
     updateOfflineDot();
   }
@@ -527,7 +536,7 @@
     // every 30 s while the page is open and someone is using it (or a video is open)
     beat = setInterval(() => { if (document.visibilityState === 'visible' && (Date.now() - lastInput < 120000 || window.LM.activePlayer)) track('ping'); }, 30000);
   }
-  const LM = window.LM = { h, api, modal, toast, svg, icon, mb, S, header, footer, logo, loadCatalog, wipeDataCache, updateOfflineDot, offline, track, calPage };
+  const LM = window.LM = { h, api, modal, toast, svg, icon, mb, S, header, footer, logo, loadCatalog, wipeDataCache, updateOfflineDot, offline, track, calPage, downloadTimetable };
 
   // ---------- routing ----------
   async function route() {
