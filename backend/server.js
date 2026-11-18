@@ -624,13 +624,17 @@ A.get('/calendar', (req, res) => {
   const schools = db.profiles.filter((p) => !p.editor).map((p) => ({ id: p.id, label: p.label, pin: p.pin, ...calendarReport(p, today) }));
   res.json({ today, schools, models: [...db.models].sort((a, b) => a.number - b.number).map((m) => ({ id: m.id, number: m.number, name: m.name })) });
 });
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const monthsText = (from, to) => { const a = MONTH_NAMES[+from.slice(5, 7) - 1] + ' ' + from.slice(0, 4); return from.slice(0, 7) === to.slice(0, 7) ? a : a + ' - ' + MONTH_NAMES[+to.slice(5, 7) - 1] + ' ' + to.slice(0, 4); };
+const monthStart = (d, add) => { const t = new Date(d + 'T00:00:00Z'); return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + add, 1)).toISOString().slice(0, 10); };
+const monthEndOf = (d, add) => { const t = new Date(d + 'T00:00:00Z'); return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + add + 1, 0)).toISOString().slice(0, 10); };
 A.get('/calendar.csv', (req, res) => {
   const today = dayKey();
   const label = { done: 'Opened in time', early: 'Opened before its dates', due: 'Due now - not opened', upcoming: 'Upcoming', late: 'Opened late (delayed)', missed: 'Delayed - not opened' };
   const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const lines = [['School', 'School code', 'From', 'To', 'Grade', 'Chapter', 'Type', 'Line', 'Model no.', 'Model', 'Status', 'First opened (UTC date)', 'Days delayed', 'Slot'].map(q).join(',')];
+  const lines = [['School', 'School code', 'Month', 'Grade', 'Chapter', 'Type', 'Line', 'Model no.', 'Model', 'Status', 'First opened (month)', 'Slot'].map(q).join(',')];
   for (const p of db.profiles.filter((x) => !x.editor)) {
-    for (const e of calendarReport(p, today).entries) for (const i of e.items) lines.push([p.label, p.pin, e.from, e.to, e.grade || '', e.chapter, e.type, e.line, i.number, i.name, label[i.status], i.first || '', i.delayDays || '', e.slot].map(q).join(','));
+    for (const e of calendarReport(p, today).entries) for (const i of e.items) lines.push([p.label, p.pin, monthsText(e.from, e.to), e.grade || '', e.chapter, e.type, e.line, i.number, i.name, label[i.status], (i.first || '').slice(0, 7), e.slot].map(q).join(','));
   }
   res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="luminary-calendar-status.csv"' }).send('\ufeff' + lines.join('\r\n'));
 });
@@ -718,12 +722,12 @@ A.post('/calendar/import', (req, res) => {
 // plan: one model after another, N days each, starting on a date (for one school or all of them)
 A.post('/calendar/plan', (req, res) => {
   const { to, start } = req.body || {};
-  const days = Math.round(+req.body.days);
-  if (!isDate(start)) return res.status(400).json({ error: 'Please choose the start date.' });
-  if (!(days >= 1 && days <= 120)) return res.status(400).json({ error: 'Days per model must be between 1 and 120.' });
+  const months = Math.round(+req.body.months);
+  if (!isDate(start)) return res.status(400).json({ error: 'Please choose the first month.' });
+  if (!(months >= 1 && months <= 12)) return res.status(400).json({ error: 'Months per model must be between 1 and 12.' });
   const targets = to === 'all' ? db.profiles.filter((p) => !p.editor) : [schoolOf(to)].filter(Boolean);
   if (!targets.length) return res.status(404).json({ error: 'Not found' });
-  for (const p of targets) { p.calendar = planModels(p).map((m, i) => ({ id: rid(4), models: [m.id], from: addDays(start, i * days), to: addDays(start, (i + 1) * days - 1) })); p.calendarInfo = null; }
+  for (const p of targets) { p.calendar = planModels(p).map((m, i) => ({ id: rid(4), models: [m.id], from: monthStart(start, i * months), to: monthEndOf(start, (i + 1) * months - 1) })); p.calendarInfo = null; }
   save();
   res.json({ ok: true, schools: targets.length });
 });

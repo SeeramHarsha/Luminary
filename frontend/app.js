@@ -314,7 +314,14 @@
   const TYPE_COL = { revision: '#6aa5ff', live: '#ffb45e', enrichment: '#b69cff' };
   const OPENED_ST = ['done', 'early', 'late'];
   const pad2 = (n) => String(n).padStart(2, '0');
-  const calDay = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const monthName = (d) => MONTHS[+d.slice(5, 7) - 1];
+  // months only, never days: 'September 2026' or 'September \u2013 October 2026'
+  const calMonths = (from, to) => {
+    const a = from.slice(0, 7), b = to.slice(0, 7);
+    if (a === b) return monthName(from) + ' ' + from.slice(0, 4);
+    return from.slice(0, 4) === to.slice(0, 4) ? monthName(from) + ' \u2013 ' + monthName(to) + ' ' + to.slice(0, 4) : monthName(from) + ' ' + from.slice(0, 4) + ' \u2013 ' + monthName(to) + ' ' + to.slice(0, 4);
+  };
+  const lastDay = (ym) => { const [y, m] = ym.split('-').map(Number); return ym + '-' + pad2(new Date(Date.UTC(y, m, 0)).getUTCDate()); };
   const chapterShort = (c) => (/^Full syllabus/i.test(c) ? 'full syllabus rev' : (c.match(/Ch \d+/g) || []).join(' & ') || c);
   function calPage(rep, opt = {}) {
     const info = rep.info || {};
@@ -326,24 +333,25 @@
       const opened = OPENED_ST.includes(it.status);
       const col = it.status === 'missed' ? '#ff5d6c' : opened ? '#2fbf71' : it.status === 'due' ? '#f5a524' : '#8a8fa3';
       const label = (opened ? '✓ ' : '○ ') + pad2(it.number) + ' · ' + it.name;
-      const tip = CAL_ST[it.status][0] + (it.delayDays ? ` (${it.delayDays} ${it.delayDays === 1 ? 'day' : 'days'})` : '');
+      const tip = CAL_ST[it.status][0];
       return opt.link && it.number ? h('a', { class: 'mchip', href: '#/m/' + it.model, style: 'color:' + col, title: tip }, label) : h('span', { class: 'mchip', style: 'color:' + col, title: tip }, label);
     };
     const byMonth = new Map();
     for (const e of rep.entries) { const k = e.from.slice(0, 7); (byMonth.get(k) || byMonth.set(k, []).get(k)).push(e); }
     for (const [ym, list] of byMonth) {
-      const head = ['Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Dates', 'Status'].concat(adm ? [''] : []);
+      const head = ['Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Month', 'Status'].concat(adm ? [''] : []);
       const rows = list.map((e) => {
         let dates;
         if (adm) {
-          const f = h('input', { class: 'input', type: 'date', value: e.from, 'aria-label': 'From' });
-          const t = h('input', { class: 'input', type: 'date', value: e.to, 'aria-label': 'To' });
-          f.addEventListener('change', () => adm.onDates(e.id, f.value, t.value));
-          t.addEventListener('change', () => adm.onDates(e.id, f.value, t.value));
+          const f = h('input', { class: 'input', type: 'month', value: e.from.slice(0, 7), 'aria-label': 'From month' });
+          const t = h('input', { class: 'input', type: 'month', value: e.to.slice(0, 7), 'aria-label': 'To month' });
+          const save = () => { if (!f.value || !t.value) return; adm.onDates(e.id, f.value + '-01', lastDay(t.value < f.value ? f.value : t.value)); };
+          f.addEventListener('change', save);
+          t.addEventListener('change', save);
           dates = h('div', { class: 'caldates' }, f, h('span', { class: 'muted small' }, 'to'), t);
-        } else dates = h('span', {}, calDay(e.from) + (e.from === e.to ? '' : ' – ' + calDay(e.to)));
+        } else dates = h('span', {}, calMonths(e.from, e.to));
         const st = CAL_ST[e.status];
-        const sub = e.status === 'missed' ? `${e.delayDays} ${e.delayDays === 1 ? 'day' : 'days'} delayed` : e.status === 'late' ? `${e.delayDays} ${e.delayDays === 1 ? 'day' : 'days'} late` : e.total > 1 && e.opened && e.opened < e.total ? `${e.opened} of ${e.total} opened` : '';
+        const sub = e.status === 'missed' ? 'delayed' : e.status === 'late' ? 'done late' : e.total > 1 && e.opened && e.opened < e.total ? `${e.opened} of ${e.total} opened` : '';
         const cells = [
           h('td', {}, e.grade ? String(e.grade) : ''),
           h('td', {}, e.chapter || e.note || ''),
@@ -393,8 +401,7 @@
 
   // ---------- the school's academic calendar ----------
   const PLAN_LABEL = { now: 'Now', next: 'Next', overdue: 'Delayed', done: '\u2713 Opened' };
-  const fmtPlanDay = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  const planDates = (p) => (p.from === p.to ? fmtPlanDay(p.from) : fmtPlanDay(p.from) + ' \u2013 ' + fmtPlanDay(p.to));
+  const planDates = (p) => calMonths(p.from, p.to);
   const planPill = (state) => h('span', { class: 'planpill ' + state }, PLAN_LABEL[state]);
   // card on the library screen: what to open now, what was missed, what comes next
   function planCard(c) {
@@ -402,7 +409,7 @@
     if (!list.length) return null;
     const by = (k) => list.filter((m) => m.plan.state === k).sort((x, y) => (x.plan.from < y.plan.from ? -1 : 1));
     const opened = by('done').length;
-    const row = (m) => h('a', { class: 'planrow', href: '#/m/' + m.id }, planPill(m.plan.state), h('span', { class: 'nm' }, String(m.number).padStart(2, '0') + ' \u00b7 ' + m.name), h('span', { class: 'muted small' }, planDates(m.plan) + (m.plan.state === 'overdue' && m.plan.days ? ` \u00b7 ${m.plan.days} ${m.plan.days === 1 ? 'day' : 'days'} late` : '')));
+    const row = (m) => h('a', { class: 'planrow', href: '#/m/' + m.id }, planPill(m.plan.state), h('span', { class: 'nm' }, String(m.number).padStart(2, '0') + ' \u00b7 ' + m.name), h('span', { class: 'muted small' }, planDates(m.plan)));
     const over = by('overdue');
     const now = by('now');
     // delayed models first (they need attention), then what is due now; long lists are trimmed

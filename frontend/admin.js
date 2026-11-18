@@ -329,10 +329,11 @@
     // one school: its calendar in the PDF's layout, tools below
     const m = sel.summary;
     const mSel = h('select', { class: 'input', 'aria-label': 'Model' }, C.models.map((x) => h('option', { value: x.id }, `${String(x.number).padStart(2, '0')} · ${x.name}`)));
-    const fromIn = h('input', { class: 'input', type: 'date', 'aria-label': 'From' });
-    const toIn = h('input', { class: 'input', type: 'date', 'aria-label': 'To' });
-    const startIn = h('input', { class: 'input', type: 'date', value: C.today, 'aria-label': 'Start date' });
-    const daysIn = h('input', { class: 'input', type: 'number', min: 1, max: 120, value: 7, 'aria-label': 'Days per model', style: 'max-width:110px' });
+    const fromIn = h('input', { class: 'input', type: 'month', value: C.today.slice(0, 7), 'aria-label': 'From month' });
+    const toIn = h('input', { class: 'input', type: 'month', value: C.today.slice(0, 7), 'aria-label': 'To month' });
+    const startIn = h('input', { class: 'input', type: 'month', value: C.today.slice(0, 7), 'aria-label': 'First month' });
+    const daysIn = h('input', { class: 'input', type: 'number', min: 1, max: 12, value: 1, 'aria-label': 'Months per model', style: 'max-width:110px' });
+    const monthEnd = (ym) => { const [y, m] = ym.split('-').map(Number); return ym + '-' + String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0'); };
     const copyTo = h('select', { class: 'input', 'aria-label': 'Copy to' }, [h('option', { value: 'all' }, 'All other schools')].concat(C.schools.filter((x) => x.id !== sel.id).map((x) => h('option', { value: x.id }, x.label))));
     const editing = !!S.calEdit || !sel.entries.length; // View = read-only, exactly what the school sees. Edit = change dates, remove rows, planning tools
     const table = window.LM.calPage(sel, editing ? { admin: {
@@ -350,12 +351,12 @@
       sel.entries.length ? table : null,
       h('div', { class: 'card', style: 'margin-top:20px' }, h('h3', { style: 'margin:0 0 6px' }, 'Create a simple plan'),
         h('p', { class: 'muted small' }, 'Models one after another, in number order, with the days you choose for each. This replaces the calendar of this school (only the models it can open are used).'),
-        h('div', { class: 'row wrap', style: 'gap:8px;align-items:end' }, h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'First day'), startIn), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'Days per model'), daysIn),
-          h('button', { class: 'btn primary sm', onclick: () => { if (sel.entries.length && !confirm('Replace the existing calendar of this school?')) return; call('/api/admin/calendar/plan', 'POST', { to: sel.id, start: startIn.value, days: daysIn.value }, 'Plan created'); } }, 'Create plan'),
-          h('button', { class: 'btn sm', onclick: () => { if (!confirm('Create this plan for ALL schools? It replaces their calendars.')) return; call('/api/admin/calendar/plan', 'POST', { to: 'all', start: startIn.value, days: daysIn.value }, 'Plan created for all schools'); } }, 'Create for all schools'))),
+        h('div', { class: 'row wrap', style: 'gap:8px;align-items:end' }, h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'First month'), startIn), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'Months per model'), daysIn),
+          h('button', { class: 'btn primary sm', onclick: () => { if (sel.entries.length && !confirm('Replace the existing calendar of this school?')) return; call('/api/admin/calendar/plan', 'POST', { to: sel.id, start: startIn.value + '-01', months: daysIn.value }, 'Plan created'); } }, 'Create plan'),
+          h('button', { class: 'btn sm', onclick: () => { if (!confirm('Create this plan for ALL schools? It replaces their calendars.')) return; call('/api/admin/calendar/plan', 'POST', { to: 'all', start: startIn.value + '-01', months: daysIn.value }, 'Plan created for all schools'); } }, 'Create for all schools'))),
       h('div', { class: 'card' }, h('h3', { style: 'margin:0 0 6px' }, 'Add one model'),
-        h('div', { class: 'row wrap', style: 'gap:8px;align-items:end' }, h('label', { class: 'field grow', style: 'margin:0;min-width:200px' }, h('span', {}, 'Model'), mSel), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'From'), fromIn), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'To'), toIn),
-          h('button', { class: 'btn primary sm', onclick: () => call(`/api/admin/profiles/${sel.id}/calendar`, 'POST', { model: mSel.value, from: fromIn.value, to: toIn.value }, 'Added') }, 'Add'))),
+        h('div', { class: 'row wrap', style: 'gap:8px;align-items:end' }, h('label', { class: 'field grow', style: 'margin:0;min-width:200px' }, h('span', {}, 'Model'), mSel), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'From month'), fromIn), h('label', { class: 'field', style: 'margin:0' }, h('span', {}, 'To'), toIn),
+          h('button', { class: 'btn primary sm', onclick: () => call(`/api/admin/profiles/${sel.id}/calendar`, 'POST', { model: mSel.value, from: fromIn.value + '-01', to: monthEnd(toIn.value < fromIn.value ? fromIn.value : toIn.value) }, 'Added') }, 'Add'))),
       sel.entries.length ? h('div', { class: 'card' }, h('div', { class: 'row wrap', style: 'gap:8px;align-items:center' }, h('span', { class: 'muted small' }, 'Copy this calendar to'), copyTo,
         h('button', { class: 'btn sm', onclick: () => { if (!confirm('Replace the calendar of the chosen school(s) with this one?')) return; call('/api/admin/calendar/copy', 'POST', { from: sel.id, to: copyTo.value }, 'Calendar copied'); } }, 'Copy'))) : null);
     if (!editing) while (out.children.length > 5) out.lastElementChild.remove(); // view mode: the calendar only
