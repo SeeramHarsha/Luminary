@@ -303,6 +303,7 @@ app.post('/api/track', (req, res) => {
     if (seen.ping && now - seen.ping < 20000) return; // pings come every 30 s; anything faster is ignored
     const add = seen.ping ? Math.min(35, Math.round((now - seen.ping) / 1000)) : 15; // first ping of a visit counts half an interval
     seen.ping = now; st.seconds += add; day.s += add;
+    if (model) { const e = day.m[model] || (day.m[model] = [0, 0]); e[2] = (e[2] || 0) + add; } // time spent on this model's page
   } else return;
   st.last = now;
   lastSeen.set(key, seen);
@@ -573,23 +574,22 @@ const OPENED = ['done', 'early', 'late'];
 function calendarReport(p, today = dayKey()) {
   const days = ((db.stats || {})[p.id] || {}).days || {};
   const act = {}; // model -> [[day, views, plays]]
-  for (const [d, x] of Object.entries(days)) for (const [mid, [v, pl]] of Object.entries(x.m || {})) if (v || pl) (act[mid] = act[mid] || []).push([d, v, pl]);
+  for (const [d, x] of Object.entries(days)) for (const [mid, [v, pl, sec]] of Object.entries(x.m || {})) if (v || pl || sec) (act[mid] = act[mid] || []).push([d, v, pl, sec || 0]);
   // status of one kit inside the dates of one session
   const itemOf = (id, from, to) => {
-    let views = 0; let plays = 0; let firstIn = null; let firstEarly = null; let firstLate = null;
-    for (const [d, v, pl] of act[id] || []) {
-      if (d < from) { if (!firstEarly || d < firstEarly) firstEarly = d; }
-      else if (d <= to) { views += v; plays += pl; if (!firstIn || d < firstIn) firstIn = d; }
-      else if (d <= today) { if (!firstLate || d < firstLate) firstLate = d; }
+    // a kit is 'opened' only when it was opened inside the month(s) of this session; a kit shared with other sessions
+    // is not counted as opened here because it was opened in another month
+    let views = 0; let plays = 0; let seconds = 0; let firstIn = null;
+    for (const [d, v, pl, sec] of act[id] || []) {
+      if (d >= from && d <= to) { views += v; plays += pl; seconds += sec; if ((v || pl) && (!firstIn || d < firstIn)) firstIn = d; }
     }
     let status;
-    if (firstIn) status = 'done'; // opened inside its dates
-    else if (today < from) status = firstEarly ? 'early' : 'upcoming';
-    else if (today <= to) status = 'due'; // its dates are running and it has not been opened yet
-    else status = firstEarly ? 'early' : firstLate ? 'late' : 'missed'; // 'missed' is shown as Delayed: dates over, never opened
+    if (firstIn) status = 'done';
+    else if (today < from) status = 'upcoming';
+    else if (today <= to) status = 'due'; // its month is running and it has not been opened yet
+    else status = 'missed'; // 'missed' is shown as Delayed: month over, never opened
     const m = findModel(id);
-    const delayDays = status === 'missed' ? daysBetween(to, today) : status === 'late' ? daysBetween(to, firstLate) : 0; // days after its dates
-    return { model: id, number: m ? m.number : 0, name: m ? m.name : 'Removed model', status, delayDays, views, plays, first: firstIn || firstEarly || firstLate, earlyOpen: !!firstEarly };
+    return { model: id, number: m ? m.number : 0, name: m ? m.name : 'Removed model', status, delayDays: 0, views, plays, seconds, first: firstIn };
   };
   const entries = (p.calendar || []).map((e) => {
     const ids = e.models || (e.model ? [e.model] : []);
@@ -604,7 +604,7 @@ function calendarReport(p, today = dayKey()) {
     return {
       id: e.id, from: e.from, to: e.to, grade: e.grade || null, chapter: e.chapter || '', type: e.type || '', line: e.line || '', what: e.what || '', slot: e.slot || '', note: e.note || '',
       status, total: items.length, opened: items.filter((i) => OPENED.includes(i.status)).length,
-      views: items.reduce((t, i) => t + i.views, 0), plays: items.reduce((t, i) => t + i.plays, 0),
+      views: items.reduce((t, i) => t + i.views, 0), plays: items.reduce((t, i) => t + i.plays, 0), seconds: items.reduce((t, i) => t + i.seconds, 0),
       delayDays: Math.max(0, ...items.map((i) => i.delayDays)), first: firsts[0] || null, items,
     };
   }).sort((x, y) => (x.from < y.from ? -1 : x.from > y.from ? 1 : (x.grade || 0) - (y.grade || 0)));
@@ -632,9 +632,9 @@ A.get('/calendar.csv', (req, res) => {
   const today = dayKey();
   const label = { done: 'Opened in time', early: 'Opened before its dates', due: 'Due now - not opened', upcoming: 'Upcoming', late: 'Opened late (delayed)', missed: 'Delayed - not opened' };
   const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const lines = [['School', 'School code', 'Month', 'Grade', 'Chapter', 'Type', 'Line', 'Model no.', 'Model', 'Status', 'First opened (month)', 'Slot'].map(q).join(',')];
+  const lines = [['School', 'School code', 'Month', 'Grade', 'Chapter', 'Type', 'Line', 'Model no.', 'Model', 'Status', 'First opened (month)', 'Minutes spent', 'Slot'].map(q).join(',')];
   for (const p of db.profiles.filter((x) => !x.editor)) {
-    for (const e of calendarReport(p, today).entries) for (const i of e.items) lines.push([p.label, p.pin, monthsText(e.from, e.to), e.grade || '', e.chapter, e.type, e.line, i.number, i.name, label[i.status], (i.first || '').slice(0, 7), e.slot].map(q).join(','));
+    for (const e of calendarReport(p, today).entries) for (const i of e.items) lines.push([p.label, p.pin, monthsText(e.from, e.to), e.grade || '', e.chapter, e.type, e.line, i.number, i.name, label[i.status], (i.first || '').slice(0, 7), Math.round((i.seconds || 0) / 60), e.slot].map(q).join(','));
   }
   res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="luminary-calendar-status.csv"' }).send('\ufeff' + lines.join('\r\n'));
 });
@@ -774,6 +774,31 @@ function usageReport(days) {
 }
 const daysParam = (q) => Math.min(3650, Math.max(1, parseInt(q, 10) || 30));
 A.get('/usage', (req, res) => res.json(usageReport(daysParam(req.query.days))));
+// forget everything recorded for one school (counters, calendar status starts again from nothing)
+A.post('/profiles/:id/usage/reset', (req, res) => {
+  const p = schoolOf(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (db.stats) delete db.stats[p.id];
+  for (const k of [...lastSeen.keys()]) if (k.startsWith(p.id + ':')) lastSeen.delete(k);
+  save();
+  res.json({ ok: true });
+});
+// month by month, model by model: opened, views, plays, time spent, next to what the timetable planned
+A.get('/usage-monthly.csv', (req, res) => {
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const nextMonth = (ym) => { const [y, m] = ym.split('-').map(Number); return m === 12 ? (y + 1) + '-01' : y + '-' + String(m + 1).padStart(2, '0'); };
+  const lines = [['School', 'School code', 'Month', 'Model no.', 'Model', 'In the timetable this month', 'Opened', 'Model page views', 'Videos played', 'Minutes spent'].map(q).join(',')];
+  for (const p of db.profiles.filter((x) => !x.editor && (!req.query.school || x.id === req.query.school))) {
+    const agg = new Map();
+    for (const [d, x] of Object.entries(((db.stats || {})[p.id] || {}).days || {})) for (const [mid, a] of Object.entries(x.m || {})) { const k = d.slice(0, 7) + '|' + mid; const e = agg.get(k) || [0, 0, 0]; e[0] += a[0] || 0; e[1] += a[1] || 0; e[2] += a[2] || 0; agg.set(k, e); }
+    const planned = new Set();
+    for (const e of p.calendar || []) for (let ym = e.from.slice(0, 7); ym <= e.to.slice(0, 7); ym = nextMonth(ym)) for (const id of e.models || []) planned.add(ym + '|' + id);
+    const rows = [...new Set([...agg.keys(), ...planned])].map((k) => { const [ym, id] = k.split('|'); const m = findModel(id); return { ym, num: m ? m.number : 0, name: m ? m.name : 'Removed model', pl: planned.has(k), a: agg.get(k) || [0, 0, 0] }; })
+      .sort((x, y) => (x.ym < y.ym ? -1 : x.ym > y.ym ? 1 : x.num - y.num));
+    for (const r of rows) lines.push([p.label, p.pin, monthsText(r.ym + '-01', r.ym + '-01'), r.num, r.name, r.pl ? 'Yes' : 'No', r.a[0] || r.a[1] ? 'Yes' : r.pl ? 'No' : '', r.a[0], r.a[1], Math.round(r.a[2] / 60)].map(q).join(','));
+  }
+  res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="luminary-monthly-metrics.csv"' }).send('\ufeff' + lines.join('\r\n'));
+});
 A.get('/usage.csv', (req, res) => {
   const rep = usageReport(daysParam(req.query.days));
   const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';

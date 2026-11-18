@@ -315,6 +315,7 @@
         h('p', { class: 'lead' }, 'Each school has an academic calendar like its plan: month by month, which grade and chapter, which models, and in which dates. Luminary checks the usage and shows whether the models were opened in time. Schools that are behind are listed first.'),
         h('div', { class: 'row wrap', style: 'margin-bottom:14px;gap:8px' },
           h('button', { class: 'btn sm', onclick: () => window.open('/api/admin/calendar.csv', '_blank') }, 'Download status as CSV'),
+          h('button', { class: 'btn sm', onclick: () => window.open('/api/admin/usage-monthly.csv', '_blank') }, 'Monthly metrics (all schools)'),
           h('button', { class: 'btn sm', onclick: () => pickFile('.json,application/json', async (file) => {
             try {
               const r = await api('/api/admin/calendar/import', { method: 'POST', body: JSON.parse(await file.text()) });
@@ -348,6 +349,8 @@
       sel.entries.length ? h('div', { class: 'row wrap', style: 'margin:8px 0 14px;gap:10px;align-items:center' },
         h('button', { class: 'btn primary sm', onclick: () => { S.calEdit = !editing; refresh(); } }, editing ? 'View calendar' : 'Edit calendar'),
         h('button', { class: 'btn sm', onclick: () => window.LM.downloadTimetable(sel) }, 'Download timetable'),
+        h('button', { class: 'btn sm', onclick: () => window.open(`/api/admin/usage-monthly.csv?school=${sel.id}`, '_blank') }, 'Monthly metrics (CSV)'),
+        h('button', { class: 'btn sm danger', onclick: () => { if (confirm(`Reset ALL usage of ${sel.label}? Counters, time spent and the opened/not opened status are cleared. This cannot be undone.`)) call(`/api/admin/profiles/${sel.id}/usage/reset`, 'POST', {}, 'Usage reset'); } }, 'Reset usage'),
         h('button', { class: 'btn sm', onclick: () => window.print() }, 'Print / save as PDF'),
         h('span', { class: 'muted small' }, editing ? 'Edit mode: change dates, remove rows, or use the planning tools below.' : 'View mode: this is what the school sees. Nothing can be changed here.')) : null,
       sel.entries.length ? table : null,
@@ -396,7 +399,8 @@
       h('p', { class: 'lead' }, 'How much each school uses Luminary: time spent, videos played and which models they open. Counted per school, with no names or personal data.'),
       range,
       h('div', { class: 'row wrap', style: 'gap:10px;margin-bottom:14px' }, big(fmtTime(U.totals.seconds), 'Total time'), big(U.totals.plays, 'Videos played'), big(U.totals.views, 'Model pages'), big(U.totals.visits, 'Visits')),
-      h('button', { class: 'btn sm', style: 'margin-bottom:14px', onclick: () => window.open(`/api/admin/usage.csv?days=${U.days}`, '_blank') }, 'Download CSV'),
+      h('button', { class: 'btn sm', style: 'margin:0 8px 14px 0', onclick: () => window.open(`/api/admin/usage.csv?days=${U.days}`, '_blank') }, 'Download CSV'),
+      h('button', { class: 'btn sm', style: 'margin-bottom:14px', onclick: () => window.open('/api/admin/usage-monthly.csv', '_blank') }, 'Monthly metrics (CSV)'),
       h('div', { class: 'list' }, cards.length ? cards : h('p', { class: 'muted' }, 'No schools yet.')));
   }
 

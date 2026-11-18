@@ -322,12 +322,13 @@
     return from.slice(0, 4) === to.slice(0, 4) ? monthName(from) + ' \u2013 ' + monthName(to) + ' ' + to.slice(0, 4) : monthName(from) + ' ' + from.slice(0, 4) + ' \u2013 ' + monthName(to) + ' ' + to.slice(0, 4);
   };
   const lastDay = (ym) => { const [y, m] = ym.split('-').map(Number); return ym + '-' + pad2(new Date(Date.UTC(y, m, 0)).getUTCDate()); };
+  const calDur = (s) => (!s ? '' : s < 60 ? s + ' sec' : s < 3600 ? Math.round(s / 60) + ' min' : Math.floor(s / 3600) + ' h ' + Math.round((s % 3600) / 60) + ' min');
   const chapterShort = (c) => (/^Full syllabus/i.test(c) ? 'full syllabus rev' : (c.match(/Ch \d+/g) || []).join(' & ') || c);
   // timetable download: one row per session, months only, opens in Excel / Sheets
   function downloadTimetable(rep) {
     const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const lines = [['Month', 'Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Status'].map(q).join(',')];
-    for (const e of rep.entries) lines.push([calMonths(e.from, e.to), e.grade || '', e.chapter || e.note || '', e.type || '', e.line || '', (e.items || []).map((i) => pad2(i.number) + ' ' + i.name).join('; '), e.what || '', e.slot || '', CAL_ST[e.status] ? CAL_ST[e.status][0] : ''].map(q).join(','));
+    const lines = [['Month', 'Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Status', 'Time spent'].map(q).join(',')];
+    for (const e of rep.entries) lines.push([calMonths(e.from, e.to), e.grade || '', e.chapter || e.note || '', e.type || '', e.line || '', (e.items || []).map((i) => pad2(i.number) + ' ' + i.name + (OPENED_ST.includes(i.status) ? ' (opened' + (i.seconds ? ', ' + calDur(i.seconds) : '') + ')' : ' (not opened)')).join('; '), e.what || '', e.slot || '', CAL_ST[e.status] ? CAL_ST[e.status][0] : '', calDur(e.seconds)].map(q).join(','));
     const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = h('a', { href: URL.createObjectURL(blob), download: ((rep.school || rep.label || 'school') + ' timetable').replace(/[^\w ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() + '.csv' });
     document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -341,8 +342,8 @@
     const chip = (it) => {
       const opened = OPENED_ST.includes(it.status);
       const col = it.status === 'missed' ? '#ff5d6c' : opened ? '#2fbf71' : it.status === 'due' ? '#f5a524' : '#8a8fa3';
-      const label = (opened ? '✓ ' : '○ ') + pad2(it.number) + ' · ' + it.name;
-      const tip = CAL_ST[it.status][0];
+      const label = (opened ? '✓ ' : '○ ') + pad2(it.number) + ' · ' + it.name + (opened && it.seconds ? ' · ' + calDur(it.seconds) : '');
+      const tip = CAL_ST[it.status][0] + (opened ? ` \u00b7 ${it.views} page views, ${it.plays} plays, ${calDur(it.seconds) || 'no time recorded'}` : '');
       return opt.link && it.number ? h('a', { class: 'mchip', href: '#/m/' + it.model, style: 'color:' + col, title: tip }, label) : h('span', { class: 'mchip', style: 'color:' + col, title: tip }, label);
     };
     const byMonth = new Map();
@@ -360,7 +361,7 @@
           dates = h('div', { class: 'caldates' }, f, h('span', { class: 'muted small' }, 'to'), t);
         } else dates = h('span', {}, calMonths(e.from, e.to));
         const st = CAL_ST[e.status];
-        const sub = e.status === 'missed' ? 'delayed' : e.status === 'late' ? 'done late' : e.total > 1 && e.opened && e.opened < e.total ? `${e.opened} of ${e.total} opened` : '';
+        const sub = [e.status === 'missed' ? 'delayed' : '', e.total > 1 && e.opened && e.opened < e.total ? `${e.opened} of ${e.total} opened` : '', e.seconds ? calDur(e.seconds) + ' spent' : ''].filter(Boolean).join(' \u00b7 ');
         const cells = [
           h('td', {}, e.grade ? String(e.grade) : ''),
           h('td', {}, e.chapter || e.note || ''),
@@ -528,7 +529,7 @@
   let lastInput = Date.now();
   ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true }));
   const deviceId = () => { try { let d = localStorage.getItem('lm_dev'); if (!d) { d = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('lm_dev', d); } return d; } catch { return 'nodevice' + Math.random().toString(36).slice(2); } };
-  const track = (type, extra) => { if (S.me && S.me.via !== 'guest') api('/api/track', { method: 'POST', body: { type, d: deviceId(), ...extra } }).catch(() => {}); };
+  const track = (type, extra) => { if (S.me && S.me.via !== 'guest') { const on = type === 'ping' && location.hash.match(/^#\/m\/([^/?]+)/); api('/api/track', { method: 'POST', body: { type, d: deviceId(), ...(on ? { m: decodeURIComponent(on[1]) } : {}), ...extra } }).catch(() => {}); } };
   let beat = null;
   function startTracking() {
     track('visit');
