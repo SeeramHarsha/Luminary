@@ -349,7 +349,7 @@
     const byMonth = new Map();
     for (const e of rep.entries) { const k = e.from.slice(0, 7); (byMonth.get(k) || byMonth.set(k, []).get(k)).push(e); }
     for (const [ym, list] of byMonth) {
-      const head = ['Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Month', 'Status'].concat(adm ? [''] : []);
+      const head = ['Grade', 'Chapter', 'Type', 'Line', 'Models', 'What happens', 'Slot', 'Month', 'Time spent', 'Status'].concat(adm ? [''] : []);
       const rows = list.map((e) => {
         let dates;
         if (adm) {
@@ -361,7 +361,7 @@
           dates = h('div', { class: 'caldates' }, f, h('span', { class: 'muted small' }, 'to'), t);
         } else dates = h('span', {}, calMonths(e.from, e.to));
         const st = CAL_ST[e.status];
-        const sub = [e.status === 'missed' ? 'delayed' : '', e.total > 1 && e.opened && e.opened < e.total ? `${e.opened} of ${e.total} opened` : '', e.seconds ? calDur(e.seconds) + ' spent' : ''].filter(Boolean).join(' \u00b7 ');
+        const sub = [e.status === 'missed' ? 'delayed' : '', e.total > 1 && e.opened && e.opened < e.total ? `${e.opened} of ${e.total} opened` : '', ''].filter(Boolean).join(' \u00b7 ');
         const cells = [
           h('td', {}, e.grade ? String(e.grade) : ''),
           h('td', {}, e.chapter || e.note || ''),
@@ -371,6 +371,7 @@
           h('td', {}, e.what || ''),
           h('td', {}, e.slot || ''),
           h('td', { class: 'nowrap' }, dates),
+          h('td', { class: 'small' }, e.items.some((i) => OPENED_ST.includes(i.status)) ? [].concat(e.items.filter((i) => OPENED_ST.includes(i.status)).map((i) => h('div', {}, pad2(i.number) + ' \u2013 ' + (calDur(i.seconds) || '< 1 min'))), e.items.length > 1 && e.seconds ? h('div', { style: 'margin-top:4px;font-weight:600' }, 'Total ' + calDur(e.seconds)) : []) : h('span', { class: 'muted' }, '\u2013')),
           h('td', {}, h('span', { class: 'planpill', style: 'color:' + st[1] }, st[0]), sub ? h('div', { class: 'muted small', style: 'margin-top:4px' }, sub) : null),
         ];
         if (adm) cells.push(h('td', {}, h('button', { class: 'btn sm danger', onclick: () => adm.onRemove(e.id) }, 'Remove')));
