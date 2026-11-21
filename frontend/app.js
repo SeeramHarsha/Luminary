@@ -577,6 +577,10 @@
 
   async function start() {
     await loadMe();
+    // the open /didac access only lasts for the tab that opened it: the normal address asks for the school code again
+    let openTab = false;
+    try { openTab = sessionStorage.getItem('lm_open') === '1'; } catch {}
+    if (S.me.via === 'open' && !openTab) { await logout(); await loadMe(); }
     if (S.me.via === 'guest') return route();
     startTracking();
     try { await loadCatalog(); } catch (e) {}
@@ -590,7 +594,7 @@
     const pathMatch = location.pathname.match(/^\/q\/([\w-]+)/);
     if (/^\/didac\/?$/i.test(location.pathname)) {
       // open link: everything unlocked, no code, nothing tracked
-      try { await api('/api/open/didac'); await wipeDataCache(); localStorage.removeItem('lm_qr'); } catch {}
+      try { await api('/api/open/didac'); await wipeDataCache(); localStorage.removeItem('lm_qr'); sessionStorage.setItem('lm_open', '1'); } catch {}
       history.replaceState(null, '', '/#/');
     } else if (pathMatch) code = pathMatch[1];
     else {

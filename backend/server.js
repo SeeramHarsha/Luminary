@@ -111,10 +111,11 @@ function verify(t) {
     return o.exp > Date.now() ? o : null;
   } catch { return null; }
 }
-function setSession(req, res, o) {
-  const exp = Date.now() + SESSION_DAYS * 864e5;
+function setSession(req, res, o, short) {
+  // short = a browser-session cookie (gone when the browser closes), used by the open /didac link so it never stays on a device
+  const exp = Date.now() + (short ? 12 * 3600e3 : SESSION_DAYS * 864e5);
   const secure = req.secure ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `__session=${sign({ ...o, exp })}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure}`);
+  res.setHeader('Set-Cookie', `__session=${sign({ ...o, exp })}; Path=/; HttpOnly; SameSite=Lax${short ? '' : '; Max-Age=' + SESSION_DAYS * 86400}${secure}`);
 }
 function clearSession(res) {
   res.setHeader('Set-Cookie', '__session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
@@ -234,7 +235,7 @@ app.get('/api/me', (req, res) => {
 
 // open access for everyone: no school code, no tracking, every model unlocked
 app.get('/api/open/didac', (req, res) => {
-  if (!(req.sess && req.sess.via === 'login' && req.sess.role === 'admin')) setSession(req, res, { r: 'open' });
+  if (!(req.sess && req.sess.via === 'login' && req.sess.role === 'admin')) setSession(req, res, { r: 'open' }, true);
   res.set('Cache-Control', 'no-store').json({ ok: true, label: OPEN_PROFILE.label });
 });
 app.get('/api/qr/:code', (req, res) => {
