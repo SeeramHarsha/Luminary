@@ -126,9 +126,12 @@ function cookie(req, name) {
 const profileOf = (id) => db.profiles.find((p) => p.id === id) || null;
 
 // resolves the session: checks cookie, header, query, and defaults to guest viewer (no login needed)
+// the public /didac link: every model open, no code, nothing tracked. It is not a school profile (never stored, never counted).
+const OPEN_PROFILE = Object.freeze({ id: 'open', label: 'Open library', mode: 'all', allowed: [], editor: false, calendar: [], code: 'didac' });
 function resolve(req) {
   const o = verify(cookie(req, '__session'));
   if (o) {
+    if (o.r === 'open') return { role: 'viewer', via: 'open', profile: OPEN_PROFILE };
     if (o.r === 'qr') {
       const profile = profileOf(o.p);
       if (profile) return { role: profile.editor ? 'editor' : 'viewer', via: 'qr', profile };
@@ -229,6 +232,11 @@ app.get('/api/me', (req, res) => {
   });
 });
 
+// open access for everyone: no school code, no tracking, every model unlocked
+app.get('/api/open/didac', (req, res) => {
+  if (!(req.sess && req.sess.via === 'login' && req.sess.role === 'admin')) setSession(req, res, { r: 'open' });
+  res.set('Cache-Control', 'no-store').json({ ok: true, label: OPEN_PROFILE.label });
+});
 app.get('/api/qr/:code', (req, res) => {
   const p = db.profiles.find((x) => x.code === req.params.code);
   if (!p) return res.status(404).json({ error: 'This QR link is not valid any more.' });
@@ -273,7 +281,7 @@ const dayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
 const lastSeen = new Map(); // 'profile:ip' -> { visit, ping } timestamps, keeps counters honest
 function trackedProfile(sess) {
   // only school visitors count: not guests, admins or editors
-  if (!sess || sess.via === 'guest' || !sess.profile) return null;
+  if (!sess || sess.via === 'guest' || sess.via === 'open' || !sess.profile) return null; // the open /didac link is never tracked
   return sess.role === 'viewer' || sess.role === 'user' ? sess.profile.id : null;
 }
 app.post('/api/track', (req, res) => {
@@ -877,7 +885,7 @@ const PUB = path.resolve(process.env.FRONTEND_DIR || path.join(__dirname, '..', 
 if (fs.existsSync(path.join(PUB, 'index.html'))) {
   app.use(express.static(PUB, { index: false, setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
   const spa = (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(PUB, 'index.html'));
-  app.get(['/', '/q/:code'], spa);
+  app.get(['/', '/q/:code', '/didac', '/didac/'], spa);
 }
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {

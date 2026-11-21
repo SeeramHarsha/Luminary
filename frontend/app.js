@@ -295,9 +295,10 @@
       const isAdmin = m.role === 'admin';
       const isStaff = isAdmin || m.role === 'editor';
       const isQr = m.via === 'qr';
+      const isOpen = m.via === 'open';
       box.append(...[
-        h('h2', {}, isStaff ? (m.name || 'Admin') : isQr ? 'School access' : 'Not signed in'),
-        h('p', { class: 'muted' }, isAdmin ? 'Signed in as Administrator' : isStaff ? 'Editor access: you can upload and manage models' : isQr ? `School: ${m.profile?.label || 'Custom'}` : 'Browsing all models · No login required'),
+        h('h2', {}, isStaff ? (m.name || 'Admin') : isQr ? 'School access' : isOpen ? 'Open library' : 'Not signed in'),
+        h('p', { class: 'muted' }, isAdmin ? 'Signed in as Administrator' : isStaff ? 'Editor access: you can upload and manage models' : isQr ? `School: ${m.profile?.label || 'Custom'}` : isOpen ? 'All models open to everyone · nothing is tracked' : 'Browsing all models · No login required'),
         S.catalog && S.catalog.models.some((x) => x.plan) ? h('a', { class: 'btn sm', style: 'width:100%;margin-bottom:10px', href: '#/plan', onclick: close }, 'View calendar') : null,
         isStaff ? h('a', { class: 'btn primary', style: 'width:100%;margin-bottom:10px', href: '#/admin', onclick: close }, isAdmin ? 'Open admin panel' : 'Manage models') : null,
         isAdmin
@@ -530,7 +531,7 @@
   let lastInput = Date.now();
   ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true }));
   const deviceId = () => { try { let d = localStorage.getItem('lm_dev'); if (!d) { d = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('lm_dev', d); } return d; } catch { return 'nodevice' + Math.random().toString(36).slice(2); } };
-  const track = (type, extra) => { if (S.me && S.me.via !== 'guest') { const on = type === 'ping' && location.hash.match(/^#\/m\/([^/?]+)/); api('/api/track', { method: 'POST', body: { type, d: deviceId(), ...(on ? { m: decodeURIComponent(on[1]) } : {}), ...extra } }).catch(() => {}); } };
+  const track = (type, extra) => { if (S.me && S.me.via !== 'guest' && S.me.via !== 'open') { const on = type === 'ping' && location.hash.match(/^#\/m\/([^/?]+)/); api('/api/track', { method: 'POST', body: { type, d: deviceId(), ...(on ? { m: decodeURIComponent(on[1]) } : {}), ...extra } }).catch(() => {}); } };
   let beat = null;
   function startTracking() {
     track('visit');
@@ -587,7 +588,11 @@
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
     let code = null;
     const pathMatch = location.pathname.match(/^\/q\/([\w-]+)/);
-    if (pathMatch) code = pathMatch[1];
+    if (/^\/didac\/?$/i.test(location.pathname)) {
+      // open link: everything unlocked, no code, nothing tracked
+      try { await api('/api/open/didac'); await wipeDataCache(); localStorage.removeItem('lm_qr'); } catch {}
+      history.replaceState(null, '', '/#/');
+    } else if (pathMatch) code = pathMatch[1];
     else {
       const hashMatch = location.hash.match(/^#\/q\/([\w-]+)/);
       if (hashMatch) code = hashMatch[1];
